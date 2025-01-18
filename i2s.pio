@@ -1,0 +1,63 @@
+;i2s BCLK64fs MCLK256fs
+.program i2s_mclk_256
+.side_set 3
+;                                  /---MCLK
+;                                  |/--BCLK
+;                                  ||/-LRCLK
+;                                  |||
+        pull block          side 0b010
+        set x, 30           side 0b110
+        nop                 side 0b010
+        nop                 side 0b110
+loop0:  out pins, 1         side 0b000
+        nop                 side 0b100
+        nop                 side 0b000
+        nop                 side 0b100
+        nop                 side 0b010
+        nop                 side 0b110
+        nop                 side 0b010
+        jmp x--, loop0      side 0b110
+        out pins, 1         side 0b001
+        pull block          side 0b101
+        set x, 30           side 0b001
+        nop                 side 0b101
+        nop                 side 0b011
+        nop                 side 0b111
+        nop                 side 0b011
+        nop                 side 0b111
+loop1:  out pins, 1         side 0b001
+        nop                 side 0b101
+        nop                 side 0b001
+        nop                 side 0b101
+        nop                 side 0b011
+        nop                 side 0b111
+        nop                 side 0b011
+        jmp x--, loop1      side 0b111
+        out pins, 1         side 0b000
+        nop                 side 0b100
+        nop                 side 0b000
+        nop                 side 0b100
+
+
+.program lsbj_16
+.side_set 2
+;                      /--BCK
+;                      |/-WS
+;                      ||
+pull block      side 0b10
+
+out pins, 1     side 0b01
+set x 13        side 0b11
+
+L1:
+out pins, 1     side 0b01
+jmp x--, L1     side 0b11
+
+out pins, 1     side 0b01
+set x, 14       side 0b11
+
+L2:
+out pins, 1     side 0b00
+jmp x--, L2     side 0b10
+
+out pins, 1     side 0b00
