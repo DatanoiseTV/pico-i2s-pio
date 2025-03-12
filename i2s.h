@@ -2,7 +2,7 @@
 #define I2S_H
 
 //pioのFIFOへデータを送る処理をcore1で行うモード
-#define I2S_USE_CORE1
+//#define I2S_USE_CORE1
 
 //sys_clkを変更してpioのフラクショナル分周を使わないようにするモード
 //MCLKはGPIO21から出力
@@ -16,8 +16,8 @@
 #define PIO_I2S         pio0
 #define PIO_I2S_SM      0
 #define DMA_I2S_CN      0
-#define PIN_I2S_DATA    1
-#define PIN_I2S_CLK     2
+#define PIN_I2S_DATA    18
+#define PIN_I2S_CLK     19
 
 void i2s_mclk_init(uint32_t audio_clock);
 void i2s_mclk_change_clock(uint32_t audio_clock);
