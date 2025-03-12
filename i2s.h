@@ -1,7 +1,12 @@
 #ifndef I2S_H
 #define I2S_H
 
+//pioのFIFOへデータを送る処理をcore1で行うモード
 #define I2S_USE_CORE1
+
+//sys_clkを変更してpioのフラクショナル分周を使わないようにするモード
+//MCLKはGPIO21から出力
+#define I2S_LOW_JITTER
 
 #define I2S_BUF_DEPTH   16
 #define I2S_START_LEVEL     I2S_BUF_DEPTH / 4
@@ -24,5 +29,7 @@ bool i2s_dequeue(int32_t** buff, int* sample);
 int8_t i2s_get_buf_length(void);
 void i2s_volume_change(int16_t v, int8_t ch);
 void core1_main(void);
+void set_sys_clock_248400khz(void);
+void set_sys_clock_172000khz(void);
 
 #endif

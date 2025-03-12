@@ -39,6 +39,34 @@ loop1:  out pins, 1         side 0b001
         nop                 side 0b100
 
 
+;i2s BCLK64fs MCLK NO
+.program i2s_no_mclk
+.side_set 2
+;                      /--BCLK
+;                      |/-LRCLK
+;                      ||
+pull block      side 0b10
+
+out pins, 1     side 0b00
+set x, 29       side 0b10
+
+L1:
+out pins, 1     side 0b00
+jmp x--, L1     side 0b10
+
+out pins, 1     side 0b01
+pull block      side 0b11
+
+out pins, 1     side 0b01
+set x, 29       side 0b11
+
+L2:
+out pins, 1     side 0b01
+jmp x--, L2     side 0b11
+
+out pins, 1     side 0b00
+
+
 .program lsbj_16
 .side_set 2
 ;                      /--BCK

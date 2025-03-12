@@ -4,6 +4,7 @@
 #include "hardware/dma.h"
 #include "hardware/sync.h"
 #include "pico/multicore.h"
+#include "hardware/pll.h"
 
 #include "i2s.pio.h"
 #include "i2s.h"
@@ -11,6 +12,10 @@
 #ifdef I2S_USE_CORE1
 #define SPINLOCK_ID_AUDIO_QUEUE (16 + 0)
 static spin_lock_t* queue_spin_lock;
+#endif
+
+#ifdef I2S_LOW_JITTER
+bool clk_48khz;
 #endif
 
 static int8_t i2s_buf_length;
@@ -49,10 +54,17 @@ void i2s_mclk_init(uint32_t audio_clock){
     gpio_set_function(data_pin, func);
     gpio_set_function(clock_pin_base, func);
     gpio_set_function(clock_pin_base + 1, func);
+    #ifndef I2S_LOW_JITTER
     gpio_set_function(clock_pin_base + 2, func);
+    #endif
 
+    #ifndef I2S_LOW_JITTER
     offset = pio_add_program(pio, &i2s_mclk_256_program);
     sm_config = i2s_mclk_256_program_get_default_config(offset);
+    #else
+    offset = pio_add_program(pio, &i2s_no_mclk_program);
+    sm_config = i2s_no_mclk_program_get_default_config(offset);
+    #endif
     
     sm_config_set_out_pins(&sm_config, data_pin, 1);
     sm_config_set_sideset_pins(&sm_config, clock_pin_base);
@@ -68,12 +80,41 @@ void i2s_mclk_init(uint32_t audio_clock){
     enqueue_pos = 0;
     dequeue_pos = 0;
 
+    #ifndef I2S_LOW_JITTER
     div = (float)clock_get_hz(clk_sys) / (float)(audio_clock * 512);
     sm_config_set_clkdiv(&sm_config, div);
+    #else
+    //sys_clk変更
+    if (audio_clock % 48000 == 0){
+        set_sys_clock_172000khz();
+        clock_gpio_init(21, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 7);
+        clk_48khz = true;
+    }
+    else {
+        set_sys_clock_248400khz();
+        clock_gpio_init(21, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 11);
+        clk_48khz = false;
+    }
+
+    //pio周波数変更
+    uint dev;
+    if (clk_48khz == true){
+        dev = 7 * 192000 / audio_clock;
+        pio_sm_set_clkdiv_int_frac(PIO_I2S, PIO_I2S_SM, dev, 0);
+    }
+    else {
+        dev = 11 * 176400 / audio_clock;
+        pio_sm_set_clkdiv_int_frac(PIO_I2S, PIO_I2S_SM, dev, 0);
+    }
+    #endif
 
     pio_sm_init(pio, sm, offset, &sm_config);
 
+    #ifndef I2S_LOW_JITTER
     uint pin_mask = (1u << data_pin) | (7u << clock_pin_base);
+    #else
+    uint pin_mask = (1u << data_pin) | (3u << clock_pin_base);
+    #endif
     pio_sm_set_pindirs_with_mask(pio, sm, pin_mask, pin_mask);
     pio_sm_set_pins(pio, sm, 1);
 
@@ -99,10 +140,35 @@ void i2s_mclk_change_clock(uint32_t audio_clock){
 }
 
 void i2s_mclk_clock_set(uint32_t audio_clock){
+    #ifndef I2S_LOW_JITTER
     //MCLK * 512
     float div;
     div = (float)clock_get_hz(clk_sys) / (float)(audio_clock * 512);
     pio_sm_set_clkdiv(PIO_I2S, PIO_I2S_SM, div);
+    #else
+    //sys_clk変更
+    if (audio_clock % 48000 == 0 && clk_48khz == false){
+        set_sys_clock_172000khz();
+        clock_gpio_init(21, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 7);
+        clk_48khz = true;
+    }
+    else if (audio_clock % 48000 != 0 && clk_48khz == true){
+        set_sys_clock_248400khz();
+        clock_gpio_init(21, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 11);
+        clk_48khz = false;
+    }
+
+    //pio周波数変更
+    uint dev;
+    if (clk_48khz == true){
+        dev = 7 * 192000 / audio_clock;
+        pio_sm_set_clkdiv_int_frac(PIO_I2S, PIO_I2S_SM, dev, 0);
+    }
+    else {
+        dev = 11 * 176400 / audio_clock;
+        pio_sm_set_clkdiv_int_frac(PIO_I2S, PIO_I2S_SM, dev, 0);
+    }
+    #endif
 }
 
 void i2s_mclk_dma_init(void){
@@ -328,5 +394,26 @@ void core1_main(void){
         dma_channel_transfer_from_buffer_now(DMA_I2S_CN, dma_buff[dma_use], dma_sample[dma_use]);
         dma_use ^= 1;
     }
+}
+#endif
+
+#ifdef I2S_LOW_JITTER
+//44.1kHz系 248.3712MHz
+//248.4 / 11 = 22.581MHz
+void set_sys_clock_248400khz(void){
+    while (running_on_fpga()) tight_loop_contents();
+    clock_configure_undivided(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_USB, USB_CLK_HZ);
+    pll_init(pll_sys, 2, 1242 * MHZ, 5, 1);
+    clock_configure_undivided(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 248400 * KHZ);
+}
+
+
+//48.0kHz系 172.032MHz
+//172.0MHz / 7 = 24.571MHz
+void set_sys_clock_172000khz(void){
+    while (running_on_fpga()) tight_loop_contents();
+    clock_configure_undivided(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_USB, USB_CLK_HZ);
+    pll_init(pll_sys, 1, 1548 * MHZ, 3, 3);
+    clock_configure_undivided(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 172 * MHZ);
 }
 #endif
