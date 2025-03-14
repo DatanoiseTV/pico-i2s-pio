@@ -196,6 +196,25 @@ void i2s_mclk_init(uint32_t audio_clock){
 }
 
 void i2s_mclk_change_clock(uint32_t audio_clock){
+    uint32_t save;
+    if (i2s_use_core1 == true){
+        save = spin_lock_blocking(queue_spin_lock);
+    }
+    else{
+        irq_set_enabled(DMA_IRQ_0, false);
+	}
+
+    i2s_buf_length = 0;
+    enqueue_pos = 0;
+    dequeue_pos = 0;
+
+    if (i2s_use_core1 == true){
+        spin_unlock(queue_spin_lock, save);
+    }
+    else{
+        irq_set_enabled(DMA_IRQ_0, true);
+    }
+
     i2s_mclk_clock_set(audio_clock);
 }
 
