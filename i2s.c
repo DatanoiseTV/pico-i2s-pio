@@ -18,6 +18,8 @@
 #include "i2s.pio.h"
 #include "i2s.h"
 
+static ExternalFunction playback_handler = default_playback_handler;
+
 #define SPINLOCK_ID_AUDIO_QUEUE (16 + 0)
 static spin_lock_t* queue_spin_lock;
 static bool clk_48khz;
@@ -84,6 +86,12 @@ void i2s_mclk_init(uint32_t audio_clock){
     if (pio == pio0) func = GPIO_FUNC_PIO0;
     else if (pio == pio1) func = GPIO_FUNC_PIO1;
     uint offset;
+
+    //再生状態をGPIO25で通知
+    if (playback_handler == default_playback_handler){
+        gpio_init(PICO_DEFAULT_LED_PIN);
+        gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
+    }
 
     gpio_set_function(data_pin, func);
     gpio_set_function(clock_pin_base, func);
@@ -338,9 +346,11 @@ void __isr __time_critical_func(i2s_handler)(){
 	
 	if (i2s_buf_length == 0){
         mute = true;
+        set_playback_state(false);
     }
 	else if (i2s_buf_length >= I2S_START_LEVEL && mute == true){
         mute = false;
+        set_playback_state(true);
     }
 
 	if (mute == false){
@@ -427,9 +437,11 @@ void core1_main(void){
 
         if (buf_length == 0){
             mute = true;
+            set_playback_state(false);
         }
         else if (buf_length >= I2S_START_LEVEL && mute == true){
             mute = false;
+            set_playback_state(true);
         }
 
         if (mute == true){
@@ -470,4 +482,16 @@ void set_sys_clock_172000khz(void){
     clock_configure_undivided(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_USB, USB_CLK_HZ);
     pll_init(pll_sys, 1, 1548 * MHZ, 3, 3);
     clock_configure_undivided(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 172 * MHZ);
+}
+
+void set_playback_handler(ExternalFunction func){
+    playback_handler = func;
+}
+
+void set_playback_state(bool state){
+    playback_handler(state);
+}
+
+void default_playback_handler(bool state){
+    gpio_put(PICO_DEFAULT_LED_PIN, state);
 }

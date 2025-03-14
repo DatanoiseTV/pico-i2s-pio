@@ -17,6 +17,13 @@
 #define I2S_DATA_LEN    (192 + 1) * 2
 
 /**
+ * @brief 再生状態の切り替わりを通知する関数の型
+ * 
+ * @param state 再生状態 true:再生開始 false:再生停止
+ */
+typedef void (*ExternalFunction)(bool state);
+
+/**
  * @brief i2sの出力ピンを設定する
  * 
  * @param data_pin data出力ピン
@@ -124,5 +131,27 @@ void set_sys_clock_248400khz(void);
  * @note 48kHz系
  */
 void set_sys_clock_172000khz(void);
+
+/**
+ * @brief i2s再生状態の切り替わりを通知するハンドラを設定する
+ * 
+ * @param func ExternalFunction形式の関数ポインタ
+ */
+void set_playback_handler(ExternalFunction func);
+
+/**
+ * @brief i2s再生状態の切り替わりを通知する
+ * 
+ * @param a 再生状態 true:再生開始 false:再生停止
+ */
+void set_playback_state(bool state);
+
+/**
+ * @brief set_playback_stateのデフォルトハンドラ
+ * 
+ * @param a 再生状態 true:再生開始 false:再生停止
+ * @note PICO_DEFAULT_LED_PINで通知
+ */
+void default_playback_handler(bool state);
 
 #endif
