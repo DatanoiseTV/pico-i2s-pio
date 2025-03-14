@@ -1,3 +1,12 @@
+/**
+ * @file i2s.pio
+ * @author BambooMaster (https://misskey.hakoniwa-project.com/@BambooMaster)
+ * @brief pico-i2s-pio
+ * @version 0.1
+ * @date 2025-03-14
+ * 
+ */
+
 ;i2s BCLK64fs MCLK256fs
 .program i2s_mclk_256
 .side_set 3

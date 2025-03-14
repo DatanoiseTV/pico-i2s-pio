@@ -1,3 +1,12 @@
+/**
+ * @file i2s.c
+ * @author BambooMaster (https://misskey.hakoniwa-project.com/@BambooMaster)
+ * @brief pico-i2s-pio
+ * @version 0.1
+ * @date 2025-03-14
+ * 
+ */
+
 #include "pico/stdlib.h"
 #include "hardware/pio.h"
 #include "hardware/clocks.h"
@@ -31,6 +40,8 @@ static uint32_t i2s_sample[I2S_BUF_DEPTH];
 
 static int32_t mul_l;
 static int32_t mul_r;
+
+//-100dB ~ 0dB (1dB step)
 static const int32_t db_to_vol[101] = {
 	0x20000000,     0x1c8520af,     0x196b230b,     0x16a77dea,     0x1430cd74,     0x11feb33c,     0x1009b9cf,     0xe4b3b63,      0xcbd4b3f,      0xb5aa19b,
     0xa1e89b1,      0x904d1bd,      0x809bcc3,      0x729f5d9,      0x66284d5,      0x5b0c438,      0x5125831,      0x4852697,      0x4074fcb,      0x3972853,
@@ -275,9 +286,10 @@ bool i2s_enqueue(uint8_t* in, int sample, uint8_t resolution){
             i2s_buf[enqueue_pos][j++] = rch_buf[i];
         }
         i2s_sample[enqueue_pos] = sample;
-
 		enqueue_pos++;
-		if (enqueue_pos >= I2S_BUF_DEPTH) enqueue_pos = 0;
+		if (enqueue_pos >= I2S_BUF_DEPTH){
+            enqueue_pos = 0;
+        }
         
         uint32_t save;
         if (i2s_use_core1 == true){
@@ -286,7 +298,9 @@ bool i2s_enqueue(uint8_t* in, int sample, uint8_t resolution){
         else{
             irq_set_enabled(DMA_IRQ_0, false);
 		}
+
         i2s_buf_length++;
+
         if (i2s_use_core1 == true){
             spin_unlock(queue_spin_lock, save);
         }
@@ -310,12 +324,12 @@ void __isr __time_critical_func(i2s_handler)(){
         mute = false;
     }
 
-	if (!mute){
+	if (mute == false){
 		dma_channel_transfer_from_buffer_now(i2s_dma_chan, i2s_buf[dequeue_pos], i2s_sample[dequeue_pos]);
-
 		dequeue_pos++;
-		if (dequeue_pos >= I2S_BUF_DEPTH) dequeue_pos = 0;
-		
+		if (dequeue_pos >= I2S_BUF_DEPTH){
+            dequeue_pos = 0;
+        }
 		i2s_buf_length--;
 	}
 	else{
@@ -332,7 +346,9 @@ bool i2s_dequeue(int32_t** buff, int* sample){
 
         uint32_t save = spin_lock_blocking(queue_spin_lock);
         dequeue_pos++;
-        if (dequeue_pos >= I2S_BUF_DEPTH) dequeue_pos = 0;
+        if (dequeue_pos >= I2S_BUF_DEPTH){
+            dequeue_pos = 0;
+        }
         i2s_buf_length--;
         spin_unlock(queue_spin_lock, save);
 
