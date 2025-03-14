@@ -9,14 +9,18 @@
 #include "i2s.pio.h"
 #include "i2s.h"
 
-#ifdef I2S_USE_CORE1
 #define SPINLOCK_ID_AUDIO_QUEUE (16 + 0)
 static spin_lock_t* queue_spin_lock;
-#endif
+static bool clk_48khz;
 
-#ifdef I2S_LOW_JITTER
-bool clk_48khz;
-#endif
+static uint i2s_dout_pin        = 18;
+static uint i2s_clk_pin_base    = 19;
+static PIO  i2s_pio             = pio0;
+static uint i2s_sm              = 0;
+
+static int i2s_dma_chan;
+static bool i2s_use_core1       = false;
+static bool i2s_low_jitter      = false;
 
 static int8_t i2s_buf_length;
 static uint8_t enqueue_pos;
@@ -41,30 +45,50 @@ static const int32_t db_to_vol[101] = {
     0x14f8,
 };
 
+void i2s_mclk_set_pin(int data_pin, int clock_pin_base){
+    i2s_dout_pin = data_pin;
+    i2s_clk_pin_base = clock_pin_base;
+}
+
+//ロージッターモードを使うときはuart,i2s,spi設定よりも先に呼び出す
+void i2s_mclk_set_config(PIO pio, uint sm, bool use_core1, bool low_jitter){
+    i2s_pio = pio;
+    i2s_sm = sm;
+    i2s_use_core1 = use_core1;
+    i2s_low_jitter = low_jitter;
+
+    //あらかじめclk_periをclk_sysから分離する
+    if (i2s_low_jitter == true){
+        clock_configure_undivided(clk_peri, 0, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_USB, USB_CLK_HZ);
+    }
+}
+
 void i2s_mclk_init(uint32_t audio_clock){
     pio_sm_config sm_config;
-    PIO pio = PIO_I2S;
-    uint sm = PIO_I2S_SM;
-    uint data_pin = PIN_I2S_DATA;
-    uint clock_pin_base = PIN_I2S_CLK;
-    uint func = GPIO_FUNC_PIO0;
+    PIO pio = i2s_pio;
+    uint sm = i2s_sm;
+    uint data_pin = i2s_dout_pin;
+    uint clock_pin_base = i2s_clk_pin_base;
+    uint func;
+    if (pio == pio0) func = GPIO_FUNC_PIO0;
+    else if (pio == pio1) func = GPIO_FUNC_PIO1;
     uint offset;
-    float div;
 
     gpio_set_function(data_pin, func);
     gpio_set_function(clock_pin_base, func);
     gpio_set_function(clock_pin_base + 1, func);
-    #ifndef I2S_LOW_JITTER
-    gpio_set_function(clock_pin_base + 2, func);
-    #endif
+    if (i2s_low_jitter == false){
+        gpio_set_function(clock_pin_base + 2, func);
+    }
 
-    #ifndef I2S_LOW_JITTER
-    offset = pio_add_program(pio, &i2s_mclk_256_program);
-    sm_config = i2s_mclk_256_program_get_default_config(offset);
-    #else
-    offset = pio_add_program(pio, &i2s_no_mclk_program);
-    sm_config = i2s_no_mclk_program_get_default_config(offset);
-    #endif
+    if (i2s_low_jitter == false){
+        offset = pio_add_program(pio, &i2s_mclk_256_program);
+        sm_config = i2s_mclk_256_program_get_default_config(offset);
+    }
+    else{
+        offset = pio_add_program(pio, &i2s_no_mclk_program);
+        sm_config = i2s_no_mclk_program_get_default_config(offset);
+    }
     
     sm_config_set_out_pins(&sm_config, data_pin, 1);
     sm_config_set_sideset_pins(&sm_config, clock_pin_base);
@@ -73,110 +97,64 @@ void i2s_mclk_init(uint32_t audio_clock){
 
     sm_config_set_set_pins(&sm_config, data_pin, 1);
 
-    #ifdef I2S_USE_CORE1
-    queue_spin_lock = spin_lock_init(SPINLOCK_ID_AUDIO_QUEUE);
-    #endif
+    if (i2s_use_core1 == true){
+        queue_spin_lock = spin_lock_init(SPINLOCK_ID_AUDIO_QUEUE);
+    }
+
     i2s_buf_length = 0;
     enqueue_pos = 0;
     dequeue_pos = 0;
 
-    #ifndef I2S_LOW_JITTER
-    div = (float)clock_get_hz(clk_sys) / (float)(audio_clock * 512);
-    sm_config_set_clkdiv(&sm_config, div);
-    #else
-    //sys_clk変更
-    if (audio_clock % 48000 == 0){
-        set_sys_clock_172000khz();
-        clock_gpio_init(21, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 7);
-        clk_48khz = true;
+    if (i2s_low_jitter == false){
+        float div;
+        div = (float)clock_get_hz(clk_sys) / (float)(audio_clock * 512);
+        sm_config_set_clkdiv(&sm_config, div);
     }
-    else {
-        set_sys_clock_248400khz();
-        clock_gpio_init(21, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 11);
-        clk_48khz = false;
-    }
+    else{
+        //sys_clk変更
+        if (audio_clock % 48000 == 0){
+            set_sys_clock_172000khz();
+            clock_gpio_init(21, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 7);
+            clk_48khz = true;
+        }
+        else {
+            set_sys_clock_248400khz();
+            clock_gpio_init(21, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 11);
+            clk_48khz = false;
+        }
 
-    //pio周波数変更
-    uint dev;
-    if (clk_48khz == true){
-        dev = 7 * 192000 / audio_clock;
-        pio_sm_set_clkdiv_int_frac(PIO_I2S, PIO_I2S_SM, dev, 0);
+        //pio周波数変更
+        uint dev;
+        if (clk_48khz == true){
+            dev = 7 * 192000 / audio_clock;
+            pio_sm_set_clkdiv_int_frac(i2s_pio, i2s_sm, dev, 0);
+        }
+        else {
+            dev = 11 * 176400 / audio_clock;
+            pio_sm_set_clkdiv_int_frac(i2s_pio, i2s_sm, dev, 0);
+        }
     }
-    else {
-        dev = 11 * 176400 / audio_clock;
-        pio_sm_set_clkdiv_int_frac(PIO_I2S, PIO_I2S_SM, dev, 0);
-    }
-    #endif
 
     pio_sm_init(pio, sm, offset, &sm_config);
 
-    #ifndef I2S_LOW_JITTER
-    uint pin_mask = (1u << data_pin) | (7u << clock_pin_base);
-    #else
-    uint pin_mask = (1u << data_pin) | (3u << clock_pin_base);
-    #endif
+    uint pin_mask;
+    if (i2s_low_jitter == false){
+        pin_mask = (1u << data_pin) | (7u << clock_pin_base);
+    }
+    else{
+        pin_mask = (1u << data_pin) | (3u << clock_pin_base);
+    }
     pio_sm_set_pindirs_with_mask(pio, sm, pin_mask, pin_mask);
     pio_sm_set_pins(pio, sm, 1);
 
     pio_sm_exec(pio, sm, pio_encode_jmp(offset));
     pio_sm_clear_fifos(pio, sm);
     pio_sm_set_enabled(pio, sm, true);
-}
 
-void i2s_mclk_change_clock(uint32_t audio_clock){
-    #ifndef I2S_USE_CORE1
-    irq_set_enabled(DMA_IRQ_0, false);
-    #endif
 
-    i2s_buf_length = 0;
-    enqueue_pos = 0;
-    dequeue_pos = 0;
-
-    i2s_mclk_clock_set(audio_clock);
-    
-    #ifndef I2S_USE_CORE1
-    irq_set_enabled(DMA_IRQ_0, true);
-    #endif
-}
-
-void i2s_mclk_clock_set(uint32_t audio_clock){
-    #ifndef I2S_LOW_JITTER
-    //MCLK * 512
-    float div;
-    div = (float)clock_get_hz(clk_sys) / (float)(audio_clock * 512);
-    pio_sm_set_clkdiv(PIO_I2S, PIO_I2S_SM, div);
-    #else
-    //sys_clk変更
-    if (audio_clock % 48000 == 0 && clk_48khz == false){
-        set_sys_clock_172000khz();
-        clock_gpio_init(21, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 7);
-        clk_48khz = true;
-    }
-    else if (audio_clock % 48000 != 0 && clk_48khz == true){
-        set_sys_clock_248400khz();
-        clock_gpio_init(21, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 11);
-        clk_48khz = false;
-    }
-
-    //pio周波数変更
-    uint dev;
-    if (clk_48khz == true){
-        dev = 7 * 192000 / audio_clock;
-        pio_sm_set_clkdiv_int_frac(PIO_I2S, PIO_I2S_SM, dev, 0);
-    }
-    else {
-        dev = 11 * 176400 / audio_clock;
-        pio_sm_set_clkdiv_int_frac(PIO_I2S, PIO_I2S_SM, dev, 0);
-    }
-    #endif
-}
-
-void i2s_mclk_dma_init(void){
-    uint ch = DMA_I2S_CN;
-    PIO pio = PIO_I2S;
-    uint sm = PIO_I2S_SM;
-
-    dma_channel_config conf = dma_channel_get_default_config(ch);
+    //dma init
+    i2s_dma_chan = dma_claim_unused_channel(true);
+    dma_channel_config conf = dma_channel_get_default_config(i2s_dma_chan);
     
     channel_config_set_read_increment(&conf, true);
     channel_config_set_write_increment(&conf, false);
@@ -184,23 +162,64 @@ void i2s_mclk_dma_init(void){
     channel_config_set_dreq(&conf, pio_get_dreq(pio, sm, true));
     
     dma_channel_configure(
-        ch,
+        i2s_dma_chan,
         &conf,
-        &PIO_I2S->txf[PIO_I2S_SM],
+        &i2s_pio->txf[i2s_sm],
         NULL,
         0,
         false
     );
 
-    dma_channel_set_irq0_enabled(ch, true);
-    #ifndef I2S_USE_CORE1
-	irq_set_exclusive_handler(DMA_IRQ_0, i2s_handler);
-    irq_set_priority(DMA_IRQ_0, 0);
-    irq_set_enabled(DMA_IRQ_0, true);
-    i2s_handler();
-    #endif
+    dma_channel_set_irq0_enabled(i2s_dma_chan, true);
+    if (i2s_use_core1 == false){
+        irq_set_exclusive_handler(DMA_IRQ_0, i2s_handler);
+        irq_set_priority(DMA_IRQ_0, 0);
+        irq_set_enabled(DMA_IRQ_0, true);
+        i2s_handler();
+    }
+
+    //core1スタート
+    if (i2s_use_core1 == true){
+        multicore_launch_core1(core1_main);
+    }
 }
 
+void i2s_mclk_change_clock(uint32_t audio_clock){
+    i2s_mclk_clock_set(audio_clock);
+}
+
+void i2s_mclk_clock_set(uint32_t audio_clock){
+    if (i2s_low_jitter == false){
+        //MCLK * 512
+        float div;
+        div = (float)clock_get_hz(clk_sys) / (float)(audio_clock * 512);
+        pio_sm_set_clkdiv(i2s_pio, i2s_sm, div);
+    }
+    else{
+        //sys_clk変更
+        if (audio_clock % 48000 == 0 && clk_48khz == false){
+            set_sys_clock_172000khz();
+            clock_gpio_init(21, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 7);
+            clk_48khz = true;
+        }
+        else if (audio_clock % 48000 != 0 && clk_48khz == true){
+            set_sys_clock_248400khz();
+            clock_gpio_init(21, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 11);
+            clk_48khz = false;
+        }
+
+        //pio周波数変更
+        uint dev;
+        if (clk_48khz == true){
+            dev = 7 * 192000 / audio_clock;
+            pio_sm_set_clkdiv_int_frac(i2s_pio, i2s_sm, dev, 0);
+        }
+        else {
+            dev = 11 * 176400 / audio_clock;
+            pio_sm_set_clkdiv_int_frac(i2s_pio, i2s_sm, dev, 0);
+        }
+    }
+}
 
 //i2sのバッファにusb受信データを積む
 bool i2s_enqueue(uint8_t* in, int sample, uint8_t resolution){
@@ -260,23 +279,25 @@ bool i2s_enqueue(uint8_t* in, int sample, uint8_t resolution){
 		enqueue_pos++;
 		if (enqueue_pos >= I2S_BUF_DEPTH) enqueue_pos = 0;
         
-        #ifdef I2S_USE_CORE1
-        uint32_t save = spin_lock_blocking(queue_spin_lock);
-        #else
-        irq_set_enabled(DMA_IRQ_0, false);
-		#endif
+        uint32_t save;
+        if (i2s_use_core1 == true){
+            save = spin_lock_blocking(queue_spin_lock);
+        }
+        else{
+            irq_set_enabled(DMA_IRQ_0, false);
+		}
         i2s_buf_length++;
-        #ifdef I2S_USE_CORE1
-        spin_unlock(queue_spin_lock, save);
-        #else
-        irq_set_enabled(DMA_IRQ_0, true);
-        #endif
+        if (i2s_use_core1 == true){
+            spin_unlock(queue_spin_lock, save);
+        }
+        else{
+            irq_set_enabled(DMA_IRQ_0, true);
+        }
 		return true;
 	}
 	else return false;
 }
 
-#ifndef I2S_USE_CORE1
 void __isr __time_critical_func(i2s_handler)(){
 	static bool mute;
 	static int32_t mute_buff[96 * 2] = {0};
@@ -290,7 +311,7 @@ void __isr __time_critical_func(i2s_handler)(){
     }
 
 	if (!mute){
-		dma_channel_transfer_from_buffer_now(DMA_I2S_CN, i2s_buf[dequeue_pos], i2s_sample[dequeue_pos]);
+		dma_channel_transfer_from_buffer_now(i2s_dma_chan, i2s_buf[dequeue_pos], i2s_sample[dequeue_pos]);
 
 		dequeue_pos++;
 		if (dequeue_pos >= I2S_BUF_DEPTH) dequeue_pos = 0;
@@ -298,14 +319,12 @@ void __isr __time_critical_func(i2s_handler)(){
 		i2s_buf_length--;
 	}
 	else{
-		dma_channel_transfer_from_buffer_now(DMA_I2S_CN, mute_buff, mute_len);
+		dma_channel_transfer_from_buffer_now(i2s_dma_chan, mute_buff, mute_len);
 	}
     
-   	dma_hw->ints0 = 1u << DMA_I2S_CN;
+   	dma_hw->ints0 = 1u << i2s_dma_chan;
 }
-#endif
 
-#ifdef I2S_USE_CORE1
 bool i2s_dequeue(int32_t** buff, int* sample){
     if (i2s_get_buf_length()){
         *buff = i2s_buf[dequeue_pos];
@@ -321,21 +340,25 @@ bool i2s_dequeue(int32_t** buff, int* sample){
     }
     else return false;
 }
-#endif
 
 int8_t i2s_get_buf_length(void){
     int8_t d;
-    #ifdef I2S_USE_CORE1
-    uint32_t save = spin_lock_blocking(queue_spin_lock);
-    #else
-    irq_set_enabled(DMA_IRQ_0, false);
-	#endif
+    uint32_t save;
+    if (i2s_use_core1 == true){
+        save = spin_lock_blocking(queue_spin_lock);
+    }
+    else{
+        irq_set_enabled(DMA_IRQ_0, false);
+	}
+
 	d = i2s_buf_length;
-    #ifdef I2S_USE_CORE1
-    spin_unlock(queue_spin_lock, save);
-    #else
-    irq_set_enabled(DMA_IRQ_0, true);
-    #endif
+
+    if (i2s_use_core1 == true){
+        spin_unlock(queue_spin_lock, save);
+    }
+    else{
+        irq_set_enabled(DMA_IRQ_0, true);
+    }
     return d;
 }
 
@@ -353,7 +376,6 @@ void i2s_volume_change(int16_t v, int8_t ch){
     }
 }
 
-#ifdef I2S_USE_CORE1
 void core1_main(void){
     int i;
     int32_t* buff;
@@ -390,14 +412,12 @@ void core1_main(void){
         }
         dma_sample[dma_use] = sample;
 
-        dma_channel_wait_for_finish_blocking(DMA_I2S_CN);
-        dma_channel_transfer_from_buffer_now(DMA_I2S_CN, dma_buff[dma_use], dma_sample[dma_use]);
+        dma_channel_wait_for_finish_blocking(i2s_dma_chan);
+        dma_channel_transfer_from_buffer_now(i2s_dma_chan, dma_buff[dma_use], dma_sample[dma_use]);
         dma_use ^= 1;
     }
 }
-#endif
 
-#ifdef I2S_LOW_JITTER
 //44.1kHz系 248.3712MHz
 //248.4 / 11 = 22.581MHz
 void set_sys_clock_248400khz(void){
@@ -416,4 +436,3 @@ void set_sys_clock_172000khz(void){
     pll_init(pll_sys, 1, 1548 * MHZ, 3, 3);
     clock_configure_undivided(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 172 * MHZ);
 }
-#endif
