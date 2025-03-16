@@ -40,9 +40,11 @@ void i2s_mclk_set_pin(int data_pin, int clock_pin_base);
  * @param sm i2sに使用するsm 0~3
  * @param use_core1 pioのFIFOへデータを送る処理をcore1で行うかどうか
  * @param low_jitter lowジッタモードを使用するかどうか
+ * @param pt8211 pt8211を使用するか
  * @note lowジッタモードを使用する場合はuart,i2s,spi設定よりも先に呼び出す
+ * @note PT8211はBCLK32fsのlsbj16,MCLKなし
  */
-void i2s_mclk_set_config(PIO pio, uint sm, bool use_core1, bool low_jitter);
+void i2s_mclk_set_config(PIO pio, uint sm, bool use_core1, bool low_jitter, bool pt8211);
 
 /**
  * @brief i2sの初期化を行う
