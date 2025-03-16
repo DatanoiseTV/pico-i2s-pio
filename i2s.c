@@ -145,12 +145,16 @@ void i2s_mclk_init(uint32_t audio_clock){
         //sys_clk変更
         if (audio_clock % 48000 == 0){
             set_sys_clock_172000khz();
-            clock_gpio_init(21, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 7);
+            if (i2s_pt8211 == false){
+                clock_gpio_init(21, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 7);
+            }
             clk_48khz = true;
         }
         else {
             set_sys_clock_248400khz();
-            clock_gpio_init(21, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 11);
+            if (i2s_pt8211 == false){
+                clock_gpio_init(21, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 11);
+            }
             clk_48khz = false;
         }
 
@@ -253,12 +257,16 @@ void i2s_mclk_clock_set(uint32_t audio_clock){
         //sys_clk変更
         if (audio_clock % 48000 == 0 && clk_48khz == false){
             set_sys_clock_172000khz();
-            clock_gpio_init(21, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 7);
+            if (i2s_pt8211 == false){
+                clock_gpio_init(21, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 7);
+            }
             clk_48khz = true;
         }
         else if (audio_clock % 48000 != 0 && clk_48khz == true){
             set_sys_clock_248400khz();
-            clock_gpio_init(21, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 11);
+            if (i2s_pt8211 == false){
+                clock_gpio_init(21, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 11);
+            }
             clk_48khz = false;
         }
 
