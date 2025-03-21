@@ -82,19 +82,23 @@ out pins, 1     side 0b00
 ;                      /--BCK
 ;                      |/-WS
 ;                      ||
-pull block      side 0b00
-set x 14        side 0b10 [1]
+pull block      side 0b10 [1]
+
+out pins, 1     side 0b00 [1]
+set x, 13       side 0b10 [1]
 
 L1:
 out pins, 1     side 0b01 [1]
 jmp x--, L1     side 0b11 [1]
 
 out pins, 1     side 0b01 [1]
-pull block      side 0b11
-set x, 14       side 0b11
+pull block      side 0b11 [1]
+
+out pins, 1     side 0b01 [1]
+set x, 13       side 0b11 [1]
 
 L2:
 out pins, 1     side 0b00 [1]
 jmp x--, L2     side 0b10 [1]
 
-out pins, 1     side 0b00
+out pins, 1     side 0b00 [1]
