@@ -63,13 +63,6 @@ void i2s_mclk_init(uint32_t audio_clock);
 void i2s_mclk_change_clock(uint32_t audio_clock);
 
 /**
- * @brief i2sのMCLKの周波数を設定する
- * 
- * @param audio_clock サンプリング周波数
- */
-void i2s_mclk_clock_set(uint32_t audio_clock);
-
-/**
  * @brief i2sのバッファにUSBから送られてきたuint8_tデータを格納する
  * 
  * @param in 格納するデータ
@@ -79,13 +72,6 @@ void i2s_mclk_clock_set(uint32_t audio_clock);
  * @return false 失敗(バッファが一杯)
  */
 bool i2s_enqueue(uint8_t* in, int sample, uint8_t resolution);
-
-/**
- * @brief i2sのバッファからデータを取り出すハンドラ
- * 
- * @note use_core1がfalseのときに呼び出される
- */
-void i2s_handler(void);
 
 /**
  * @brief i2sのバッファからデータを取り出す
@@ -114,46 +100,10 @@ int8_t i2s_get_buf_length(void);
 void i2s_volume_change(int16_t v, int8_t ch);
 
 /**
- * @brief core1のメイン関数
- * 
- * @note use_core1がtrueのときに呼び出される
- */
-void core1_main(void);
-
-/**
- * @brief システムクロックを248.4MHzに設定する
- * 
- * @note 44.1kHz系
- */
-void set_sys_clock_248400khz(void);
-
-/**
- * @brief システムクロックを172MHzに設定する
- * 
- * @note 48kHz系
- */
-void set_sys_clock_172000khz(void);
-
-/**
  * @brief i2s再生状態の切り替わりを通知するハンドラを設定する
  * 
  * @param func ExternalFunction形式の関数ポインタ
  */
 void set_playback_handler(ExternalFunction func);
-
-/**
- * @brief i2s再生状態の切り替わりを通知する
- * 
- * @param a 再生状態 true:再生開始 false:再生停止
- */
-void set_playback_state(bool state);
-
-/**
- * @brief set_playback_stateのデフォルトハンドラ
- * 
- * @param a 再生状態 true:再生開始 false:再生停止
- * @note PICO_DEFAULT_LED_PINで通知
- */
-void default_playback_handler(bool state);
 
 #endif

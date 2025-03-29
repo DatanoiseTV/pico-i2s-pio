@@ -18,8 +18,6 @@
 #include "i2s.pio.h"
 #include "i2s.h"
 
-static ExternalFunction playback_handler = default_playback_handler;
-
 #define SPINLOCK_ID_AUDIO_QUEUE (16 + 0)
 static spin_lock_t* queue_spin_lock;
 static bool clk_48khz;
@@ -58,6 +56,132 @@ static const int32_t db_to_vol[101] = {
     0x4251,         0x3b1b,         0x34ad,         0x2ef3,         0x29d7,         0x254b,         0x213c,         0x1d9f,         0x1a66,         0x1787,
     0x14f8,
 };
+
+/**
+ * @brief set_playback_stateのデフォルトハンドラ
+ * 
+ * @param state 再生状態 true:再生開始 false:再生停止
+ * @note PICO_DEFAULT_LED_PINで通知
+ */
+static inline void default_playback_handler(bool state){
+    gpio_put(PICO_DEFAULT_LED_PIN, state);
+}
+static ExternalFunction playback_handler = default_playback_handler;
+
+/**
+ * @brief i2s再生状態の切り替わりを通知する
+ * 
+ * @param state 再生状態 true:再生開始 false:再生停止
+ */
+static inline void set_playback_state(bool state){
+    playback_handler(state);
+}
+
+/**
+ * @brief システムクロックを248.4MHzに設定する
+ * 
+ * @note 44.1kHz系 248.4 / 11 = 22.581MHz
+ */
+static void set_sys_clock_248400khz(void){
+    while (running_on_fpga()) tight_loop_contents();
+    clock_configure_undivided(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_USB, USB_CLK_HZ);
+    pll_init(pll_sys, 2, 1242 * MHZ, 5, 1);
+    clock_configure_undivided(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 248400 * KHZ);
+}
+
+/**
+ * @brief システムクロックを172MHzに設定する
+ * 
+ * @note 48kHz系 172.0MHz / 7 = 24.571MHz
+ */
+static void set_sys_clock_172000khz(void){
+    while (running_on_fpga()) tight_loop_contents();
+    clock_configure_undivided(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_USB, USB_CLK_HZ);
+    pll_init(pll_sys, 1, 1548 * MHZ, 3, 3);
+    clock_configure_undivided(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 172 * MHZ);
+}
+
+/**
+ * @brief i2sのバッファからデータを取り出すハンドラ
+ * 
+ * @note use_core1がfalseのときに呼び出される
+ */
+static void __isr __time_critical_func(i2s_handler)(){
+	static bool mute;
+	static int32_t mute_buff[96 * 2] = {0};
+	static uint32_t mute_len = sizeof(mute_buff) / sizeof(int32_t);
+	
+	if (i2s_buf_length == 0){
+        mute = true;
+        set_playback_state(false);
+    }
+	else if (i2s_buf_length >= I2S_START_LEVEL && mute == true){
+        mute = false;
+        set_playback_state(true);
+    }
+
+	if (mute == false){
+		dma_channel_transfer_from_buffer_now(i2s_dma_chan, i2s_buf[dequeue_pos], i2s_sample[dequeue_pos]);
+		dequeue_pos++;
+		if (dequeue_pos >= I2S_BUF_DEPTH){
+            dequeue_pos = 0;
+        }
+		i2s_buf_length--;
+	}
+	else{
+		dma_channel_transfer_from_buffer_now(i2s_dma_chan, mute_buff, mute_len);
+	}
+    
+   	dma_hw->ints0 = 1u << i2s_dma_chan;
+}
+
+/**
+ * @brief core1のメイン関数
+ * 
+ * @note use_core1がtrueのときに呼び出される
+ */
+static void core1_main(void){
+    int32_t* buff;
+    int dma_sample[2], sample;
+    bool mute = false;
+    int32_t mute_buff[96 * 2] = {0};
+    uint32_t mute_len = sizeof(mute_buff) / sizeof(int32_t);
+    int8_t buf_length;
+    int32_t dma_buff[I2S_BUF_DEPTH][I2S_DATA_LEN];
+    uint8_t dma_use = 0;
+
+    while (1){
+        buf_length = i2s_get_buf_length();
+
+        if (buf_length == 0){
+            mute = true;
+            set_playback_state(false);
+        }
+        else if (buf_length >= I2S_START_LEVEL && mute == true){
+            mute = false;
+            set_playback_state(true);
+        }
+
+        if (mute == true){
+            buff = mute_buff;
+            sample = mute_len;
+        }
+        else if (i2s_dequeue(&buff, &sample) == false){
+            buff = mute_buff;
+            sample = mute_len;
+        }
+        
+        //i2sバッファに格納
+        for (int i = 0; i < sample; i++){
+            dma_buff[dma_use][i] = buff[i];
+        }
+        dma_sample[dma_use] = sample;
+
+        dma_channel_wait_for_finish_blocking(i2s_dma_chan);
+        dma_channel_transfer_from_buffer_now(i2s_dma_chan, dma_buff[dma_use], dma_sample[dma_use]);
+        dma_use ^= 1;
+    }
+}
 
 void i2s_mclk_set_pin(int data_pin, int clock_pin_base){
     i2s_dout_pin = data_pin;
@@ -249,10 +373,7 @@ void i2s_mclk_change_clock(uint32_t audio_clock){
         irq_set_enabled(DMA_IRQ_0, true);
     }
 
-    i2s_mclk_clock_set(audio_clock);
-}
-
-void i2s_mclk_clock_set(uint32_t audio_clock){
+    //周波数変更
     if (i2s_low_jitter == false && i2s_pt8211 == false){
         float div;
         div = (float)clock_get_hz(clk_sys) / (float)(audio_clock * 512);
@@ -383,35 +504,6 @@ bool i2s_enqueue(uint8_t* in, int sample, uint8_t resolution){
 	else return false;
 }
 
-void __isr __time_critical_func(i2s_handler)(){
-	static bool mute;
-	static int32_t mute_buff[96 * 2] = {0};
-	static uint32_t mute_len = sizeof(mute_buff) / sizeof(int32_t);
-	
-	if (i2s_buf_length == 0){
-        mute = true;
-        set_playback_state(false);
-    }
-	else if (i2s_buf_length >= I2S_START_LEVEL && mute == true){
-        mute = false;
-        set_playback_state(true);
-    }
-
-	if (mute == false){
-		dma_channel_transfer_from_buffer_now(i2s_dma_chan, i2s_buf[dequeue_pos], i2s_sample[dequeue_pos]);
-		dequeue_pos++;
-		if (dequeue_pos >= I2S_BUF_DEPTH){
-            dequeue_pos = 0;
-        }
-		i2s_buf_length--;
-	}
-	else{
-		dma_channel_transfer_from_buffer_now(i2s_dma_chan, mute_buff, mute_len);
-	}
-    
-   	dma_hw->ints0 = 1u << i2s_dma_chan;
-}
-
 bool i2s_dequeue(int32_t** buff, int* sample){
     if (i2s_get_buf_length()){
         *buff = i2s_buf[dequeue_pos];
@@ -451,7 +543,6 @@ int8_t i2s_get_buf_length(void){
     return d;
 }
 
-
 void i2s_volume_change(int16_t v, int8_t ch){
     if (ch == 0){
         mul_l = db_to_vol[-v >> 8];
@@ -465,77 +556,6 @@ void i2s_volume_change(int16_t v, int8_t ch){
     }
 }
 
-void core1_main(void){
-    int i;
-    int32_t* buff;
-    int dma_sample[2], sample;
-    bool mute = false;
-    int32_t mute_buff[96 * 2] = {0};
-    uint32_t mute_len = sizeof(mute_buff) / sizeof(int32_t);
-    int8_t buf_length;
-    int32_t dma_buff[I2S_BUF_DEPTH][I2S_DATA_LEN];
-    uint8_t dma_use = 0;
-
-    while (1){
-        buf_length = i2s_get_buf_length();
-
-        if (buf_length == 0){
-            mute = true;
-            set_playback_state(false);
-        }
-        else if (buf_length >= I2S_START_LEVEL && mute == true){
-            mute = false;
-            set_playback_state(true);
-        }
-
-        if (mute == true){
-            buff = mute_buff;
-            sample = mute_len;
-        }
-        else if (i2s_dequeue(&buff, &sample) == false){
-            buff = mute_buff;
-            sample = mute_len;
-        }
-        
-        //i2sバッファに格納
-        for (i = 0; i < sample; i++){
-            dma_buff[dma_use][i] = buff[i];
-        }
-        dma_sample[dma_use] = sample;
-
-        dma_channel_wait_for_finish_blocking(i2s_dma_chan);
-        dma_channel_transfer_from_buffer_now(i2s_dma_chan, dma_buff[dma_use], dma_sample[dma_use]);
-        dma_use ^= 1;
-    }
-}
-
-//44.1kHz系 248.3712MHz
-//248.4 / 11 = 22.581MHz
-void set_sys_clock_248400khz(void){
-    while (running_on_fpga()) tight_loop_contents();
-    clock_configure_undivided(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_USB, USB_CLK_HZ);
-    pll_init(pll_sys, 2, 1242 * MHZ, 5, 1);
-    clock_configure_undivided(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 248400 * KHZ);
-}
-
-
-//48.0kHz系 172.032MHz
-//172.0MHz / 7 = 24.571MHz
-void set_sys_clock_172000khz(void){
-    while (running_on_fpga()) tight_loop_contents();
-    clock_configure_undivided(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_USB, USB_CLK_HZ);
-    pll_init(pll_sys, 1, 1548 * MHZ, 3, 3);
-    clock_configure_undivided(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 172 * MHZ);
-}
-
 void set_playback_handler(ExternalFunction func){
     playback_handler = func;
-}
-
-void set_playback_state(bool state){
-    playback_handler(state);
-}
-
-void default_playback_handler(bool state){
-    gpio_put(PICO_DEFAULT_LED_PIN, state);
 }
