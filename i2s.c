@@ -138,7 +138,7 @@ void i2s_mclk_init(uint32_t audio_clock){
     }
     else if (i2s_low_jitter == false && i2s_pt8211 == true){
         float div;
-        div = (float)clock_get_hz(clk_sys) / (float)(audio_clock * 128);
+        div = (float)clock_get_hz(clk_sys) / (float)(audio_clock * 64);
         sm_config_set_clkdiv(&sm_config, div);
     }
     else{
@@ -161,11 +161,21 @@ void i2s_mclk_init(uint32_t audio_clock){
         //pio周波数変更
         uint dev;
         if (clk_48khz == true){
-            dev = 7 * 192000 / audio_clock;
+            if (i2s_pt8211 == false){
+                dev = 7 * 192000 / audio_clock;
+            }
+            else{
+                dev = 7 * 384000 / audio_clock;
+            }
             pio_sm_set_clkdiv_int_frac(i2s_pio, i2s_sm, dev, 0);
         }
         else {
-            dev = 11 * 176400 / audio_clock;
+            if (i2s_pt8211 == false){
+                dev = 11 * 176400 / audio_clock;
+            }
+            else{
+                dev = 11 * 352800 / audio_clock;
+            }
             pio_sm_set_clkdiv_int_frac(i2s_pio, i2s_sm, dev, 0);
         }
     }
@@ -250,7 +260,7 @@ void i2s_mclk_clock_set(uint32_t audio_clock){
     }
     else if (i2s_low_jitter == false && i2s_pt8211 == true){
         float div;
-        div = (float)clock_get_hz(clk_sys) / (float)(audio_clock * 128);
+        div = (float)clock_get_hz(clk_sys) / (float)(audio_clock * 64);
         pio_sm_set_clkdiv(i2s_pio, i2s_sm, div);
     }
     else{
@@ -273,11 +283,21 @@ void i2s_mclk_clock_set(uint32_t audio_clock){
         //pio周波数変更
         uint dev;
         if (clk_48khz == true){
-            dev = 7 * 192000 / audio_clock;
+            if (i2s_pt8211 == false){
+                dev = 7 * 192000 / audio_clock;
+            }
+            else{
+                dev = 7 * 384000 / audio_clock;
+            }
             pio_sm_set_clkdiv_int_frac(i2s_pio, i2s_sm, dev, 0);
         }
         else {
-            dev = 11 * 176400 / audio_clock;
+            if (i2s_pt8211 == false){
+                dev = 11 * 176400 / audio_clock;
+            }
+            else{
+                dev = 11 * 352800 / audio_clock;
+            }
             pio_sm_set_clkdiv_int_frac(i2s_pio, i2s_sm, dev, 0);
         }
     }
