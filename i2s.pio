@@ -84,8 +84,8 @@ out pins, 1     side 0b00
 ;                      ||
 pull block      side 0b10
 
-out pins, 1     side 0b00
-set x, 13       side 0b10
+out pins, 1     side 0b01
+set x, 13       side 0b11
 
 L1:
 out pins, 1     side 0b01
@@ -94,8 +94,8 @@ jmp x--, L1     side 0b11
 out pins, 1     side 0b01
 pull block      side 0b11
 
-out pins, 1     side 0b01
-set x, 13       side 0b11
+out pins, 1     side 0b00
+set x, 13       side 0b10
 
 L2:
 out pins, 1     side 0b00
