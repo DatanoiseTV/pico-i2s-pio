@@ -18,7 +18,6 @@
 #include "i2s.pio.h"
 #include "i2s.h"
 
-#define SPINLOCK_ID_AUDIO_QUEUE (16 + 0)
 static spin_lock_t* queue_spin_lock;
 static bool clk_48khz;
 
@@ -140,7 +139,7 @@ static void __isr __time_critical_func(i2s_handler)(){
  * 
  * @note use_core1がtrueのときに呼び出される
  */
-static void core1_main(void){
+static void defalut_core1_main(void){
     int32_t* buff;
     int dma_sample[2], sample;
     bool mute = false;
@@ -182,6 +181,7 @@ static void core1_main(void){
         dma_use ^= 1;
     }
 }
+static Core1MainFunction core1_main_funcion = defalut_core1_main;
 
 void i2s_mclk_set_pin(int data_pin, int clock_pin_base){
     i2s_dout_pin = data_pin;
@@ -248,7 +248,7 @@ void i2s_mclk_init(uint32_t audio_clock){
     sm_config_set_set_pins(&sm_config, data_pin, 1);
 
     if (i2s_use_core1 == true){
-        queue_spin_lock = spin_lock_init(SPINLOCK_ID_AUDIO_QUEUE);
+        queue_spin_lock = spin_lock_init(spin_lock_claim_unused(true));
     }
 
     i2s_buf_length = 0;
@@ -349,7 +349,7 @@ void i2s_mclk_init(uint32_t audio_clock){
 
     //core1スタート
     if (i2s_use_core1 == true){
-        multicore_launch_core1(core1_main);
+        multicore_launch_core1(core1_main_funcion);
     }
 }
 
@@ -558,4 +558,8 @@ void i2s_volume_change(int16_t v, int8_t ch){
 
 void set_playback_handler(ExternalFunction func){
     playback_handler = func;
+}
+
+void set_core1_main_function(Core1MainFunction func){
+    core1_main_funcion = func;
 }

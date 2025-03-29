@@ -24,6 +24,12 @@
 typedef void (*ExternalFunction)(bool state);
 
 /**
+ * @brief core1のmain関数の型
+ * 
+ */
+typedef void (*Core1MainFunction)(void);
+
+/**
  * @brief i2sの出力ピンを設定する
  * 
  * @param data_pin data出力ピン
@@ -105,5 +111,12 @@ void i2s_volume_change(int16_t v, int8_t ch);
  * @param func ExternalFunction形式の関数ポインタ
  */
 void set_playback_handler(ExternalFunction func);
+
+/**
+ * @brief core1のmain関数を設定する
+ * 
+ * @param func Core1MainFunction形式の関数ポインタ
+ */
+void set_core1_main_function(Core1MainFunction func);
 
 #endif
