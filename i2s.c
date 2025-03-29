@@ -26,7 +26,7 @@ static uint i2s_clk_pin_base    = 19;
 static PIO  i2s_pio             = pio0;
 static uint i2s_sm              = 0;
 
-static int i2s_dma_chan;
+static int i2s_dma_chan         = 0;
 static bool i2s_use_core1       = false;
 static bool i2s_low_jitter      = false;
 static bool i2s_pt8211          = false;
@@ -189,9 +189,10 @@ void i2s_mclk_set_pin(int data_pin, int clock_pin_base){
 }
 
 //ロージッターモードを使うときはuart,i2s,spi設定よりも先に呼び出す
-void i2s_mclk_set_config(PIO pio, uint sm, bool use_core1, bool low_jitter, bool pt8211){
+void i2s_mclk_set_config(PIO pio, uint sm, int dma_ch, bool use_core1, bool low_jitter, bool pt8211){
     i2s_pio = pio;
     i2s_sm = sm;
+    i2s_dma_chan = dma_ch;
     i2s_use_core1 = use_core1;
     i2s_low_jitter = low_jitter;
     i2s_pt8211 = pt8211;
@@ -322,7 +323,6 @@ void i2s_mclk_init(uint32_t audio_clock){
 
 
     //dma init
-    i2s_dma_chan = dma_claim_unused_channel(true);
     dma_channel_config conf = dma_channel_get_default_config(i2s_dma_chan);
     
     channel_config_set_read_increment(&conf, true);
