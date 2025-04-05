@@ -290,11 +290,11 @@ void i2s_mclk_init(uint32_t audio_clock){
     else{
         //sys_clk変更
         if (audio_clock % 48000 == 0){
-            set_sys_clock_271mhz();
+            set_sys_clock_295mhz();
             clk_48khz = true;
         }
         else {
-            set_sys_clock_295mhz();
+            set_sys_clock_271mhz();
             clk_48khz = false;
         }
 
@@ -397,11 +397,11 @@ void i2s_mclk_change_clock(uint32_t audio_clock){
     else{
         //sys_clk変更
         if (audio_clock % 48000 == 0 && clk_48khz == false){
-            set_sys_clock_271mhz();
+            set_sys_clock_295mhz();
             clk_48khz = true;
         }
         else if (audio_clock % 48000 != 0 && clk_48khz == true){
-            set_sys_clock_295mhz();
+            set_sys_clock_271mhz();
             clk_48khz = false;
         }
 
