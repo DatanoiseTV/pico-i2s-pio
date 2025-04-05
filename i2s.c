@@ -30,7 +30,7 @@ static uint i2s_sm              = 0;
 static int i2s_dma_chan         = 0;
 static bool i2s_use_core1       = false;
 static bool i2s_low_jitter      = false;
-static bool i2s_clock_ratio     = 6;
+static bool i2s_overclock     = 6;
 static bool i2s_pt8211          = false;
 
 static int8_t i2s_buf_length;
@@ -82,36 +82,48 @@ static inline void set_playback_state(bool state){
  * @brief システムクロックを271MHzに設定する
  * 
  * @note 44.1kHz系 271 / 12 = 22.583MHz
- * @note i2s_clock_ratio=6のとき135.5MHz
  */
-static void set_sys_clock_271mhz(void){
+static void set_sys_clock_271000khz(void){
     while (running_on_fpga()) tight_loop_contents();
     clock_configure_undivided(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_USB, USB_CLK_HZ);
     pll_init(pll_sys, 2, 1626 * MHZ, 6, 1);
-    if (i2s_clock_ratio == 6){
-        clock_configure(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 271 * MHZ, 135500 * KHZ);
-    }
-    else if (i2s_clock_ratio == 12){
-        clock_configure_undivided(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 271 * MHZ);
-    }
+    clock_configure_undivided(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 271 * MHZ);
+}
+
+/**
+ * @brief システムクロックを135.5MHzに設定する
+ * 
+ * @note 44.1kHz系 135.5 / 6 = 22.583MHz
+ */
+static void set_sys_clock_135500khz(void){
+    while (running_on_fpga()) tight_loop_contents();
+    clock_configure_undivided(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_USB, USB_CLK_HZ);
+    pll_init(pll_sys, 2, 1626 * MHZ, 6, 1);
+    clock_configure(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 271 * MHZ, 135500 * KHZ);
 }
 
 /**
  * @brief システムクロックを295MHzに設定する
  * 
  * @note 48kHz系 295 / 12 = 24.583MHz
- * @note i2s_clock_ratio=6のとき147.5MHz
  */
-static void set_sys_clock_295mhz(void){
+static void set_sys_clock_295000khz(void){
     while (running_on_fpga()) tight_loop_contents();
     clock_configure_undivided(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_USB, USB_CLK_HZ);
     pll_init(pll_sys, 2, 1770 * MHZ, 6, 1);
-    if (i2s_clock_ratio == 6){
-        clock_configure(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 295 * MHZ, 147500 * KHZ);
-    }
-    else if (i2s_clock_ratio == 12){
-        clock_configure_undivided(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 295 * MHZ);
-    }
+    clock_configure_undivided(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 295 * MHZ);
+}
+
+/**
+ * @brief システムクロックを147.5MHzに設定する
+ * 
+ * @note 48kHz系 147.5 / 6 = 24.583MHz
+ */
+static void set_sys_clock_147500khz(void){
+    while (running_on_fpga()) tight_loop_contents();
+    clock_configure_undivided(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_USB, USB_CLK_HZ);
+    pll_init(pll_sys, 2, 1770 * MHZ, 6, 1);
+    clock_configure(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 295 * MHZ, 147500 * KHZ);
 }
 
 /**
@@ -209,16 +221,11 @@ void i2s_mclk_set_config(PIO pio, uint sm, int dma_ch, bool use_core1, bool low_
     i2s_dma_chan = dma_ch;
     i2s_use_core1 = use_core1;
     i2s_low_jitter = low_jitter;
+    i2s_overclock = overclock;
     i2s_pt8211 = pt8211;
 
     //あらかじめclk_periをclk_sysから分離する
     if (i2s_low_jitter == true){
-        if (overclock == true){
-            i2s_clock_ratio = 12;
-        }
-        else{
-            i2s_clock_ratio = 6;
-        }
         vreg_set_voltage(VREG_VOLTAGE_1_30);
         clock_configure_undivided(clk_peri, 0, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_USB, USB_CLK_HZ);
     }
@@ -284,33 +291,50 @@ void i2s_mclk_init(uint32_t audio_clock){
     }
     else if (i2s_low_jitter == false && i2s_pt8211 == true){
         float div;
-        div = (float)clock_get_hz(clk_sys) / (float)(audio_clock * 64);
+        div = (float)clock_get_hz(clk_sys) / (float)(audio_clock * 128);
         sm_config_set_clkdiv(&sm_config, div);
     }
     else{
         //sys_clk変更
         if (audio_clock % 48000 == 0){
-            set_sys_clock_295mhz();
+            if (i2s_overclock == true){
+                set_sys_clock_295000khz();
+            }
+            else {
+                set_sys_clock_147500khz();
+            }
             clk_48khz = true;
         }
         else {
-            set_sys_clock_271mhz();
+            if (i2s_overclock == true){
+                set_sys_clock_271000khz();
+            }
+            else {
+                set_sys_clock_135500khz();
+            }
             clk_48khz = false;
         }
 
         //mclk出力
         if (i2s_pt8211 == false){
-            clock_gpio_init(21, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, i2s_clock_ratio);
+            clock_gpio_init(21, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 12);
         }
 
         //pio周波数変更
         uint dev;
         if (clk_48khz == true){
-            dev = i2s_clock_ratio * 384000 / audio_clock;
+            dev = 12 * 192000 / audio_clock;
+            if (i2s_overclock == false){
+                dev /= 2;
+            }
             pio_sm_set_clkdiv_int_frac(i2s_pio, i2s_sm, dev, 0);
         }
         else {
-            dev = i2s_clock_ratio * 352800 / audio_clock;
+            dev = 12 * 192000 / audio_clock;
+            if (i2s_overclock == false){
+                dev /= 2;
+            }
+            dev = 12 * 176400 / audio_clock;
             pio_sm_set_clkdiv_int_frac(i2s_pio, i2s_sm, dev, 0);
         }
     }
@@ -396,23 +420,39 @@ void i2s_mclk_change_clock(uint32_t audio_clock){
     }
     else{
         //sys_clk変更
-        if (audio_clock % 48000 == 0 && clk_48khz == false){
-            set_sys_clock_295mhz();
+        if (audio_clock % 48000 == 0){
+            if (i2s_overclock == true){
+                set_sys_clock_295000khz();
+            }
+            else {
+                set_sys_clock_147500khz();
+            }
             clk_48khz = true;
         }
-        else if (audio_clock % 48000 != 0 && clk_48khz == true){
-            set_sys_clock_271mhz();
+        else {
+            if (i2s_overclock == true){
+                set_sys_clock_271000khz();
+            }
+            else {
+                set_sys_clock_135500khz();
+            }
             clk_48khz = false;
         }
 
         //pio周波数変更
         uint dev;
         if (clk_48khz == true){
-            dev = i2s_clock_ratio * 384000 / audio_clock;
+            dev = 12 * 192000 / audio_clock;
+            if (i2s_overclock == false){
+                dev /= 2;
+            }
             pio_sm_set_clkdiv_int_frac(i2s_pio, i2s_sm, dev, 0);
         }
         else {
-            dev = i2s_clock_ratio * 352800 / audio_clock;
+            dev = 12 * 176400 / audio_clock;
+            if (i2s_overclock == false){
+                dev /= 2;
+            }
             pio_sm_set_clkdiv_int_frac(i2s_pio, i2s_sm, dev, 0);
         }
     }
