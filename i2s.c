@@ -14,6 +14,7 @@
 #include "hardware/sync.h"
 #include "pico/multicore.h"
 #include "hardware/pll.h"
+#include "hardware/vreg.h"
 
 #include "i2s.pio.h"
 #include "i2s.h"
@@ -29,6 +30,7 @@ static uint i2s_sm              = 0;
 static int i2s_dma_chan         = 0;
 static bool i2s_use_core1       = false;
 static bool i2s_low_jitter      = false;
+static bool i2s_clock_ratio     = 6;
 static bool i2s_pt8211          = false;
 
 static int8_t i2s_buf_length;
@@ -77,27 +79,39 @@ static inline void set_playback_state(bool state){
 }
 
 /**
- * @brief システムクロックを248.4MHzに設定する
+ * @brief システムクロックを271MHzに設定する
  * 
- * @note 44.1kHz系 248.4 / 11 = 22.581MHz
+ * @note 44.1kHz系 271 / 12 = 22.583MHz
+ * @note i2s_clock_ratio=6のとき135.5MHz
  */
-static void set_sys_clock_248400khz(void){
+static void set_sys_clock_271mhz(void){
     while (running_on_fpga()) tight_loop_contents();
     clock_configure_undivided(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_USB, USB_CLK_HZ);
-    pll_init(pll_sys, 2, 1242 * MHZ, 5, 1);
-    clock_configure_undivided(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 248400 * KHZ);
+    pll_init(pll_sys, 2, 1626 * MHZ, 6, 1);
+    if (i2s_clock_ratio == 6){
+        clock_configure(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 271 * MHZ, 135500 * KHZ);
+    }
+    else if (i2s_clock_ratio == 12){
+        clock_configure_undivided(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 271 * MHZ);
+    }
 }
 
 /**
- * @brief システムクロックを172MHzに設定する
+ * @brief システムクロックを295MHzに設定する
  * 
- * @note 48kHz系 172.0MHz / 7 = 24.571MHz
+ * @note 48kHz系 295 / 12 = 24.583MHz
+ * @note i2s_clock_ratio=6のとき147.5MHz
  */
-static void set_sys_clock_172000khz(void){
+static void set_sys_clock_295mhz(void){
     while (running_on_fpga()) tight_loop_contents();
     clock_configure_undivided(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_USB, USB_CLK_HZ);
-    pll_init(pll_sys, 1, 1548 * MHZ, 3, 3);
-    clock_configure_undivided(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 172 * MHZ);
+    pll_init(pll_sys, 2, 1770 * MHZ, 6, 1);
+    if (i2s_clock_ratio == 6){
+        clock_configure(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 295 * MHZ, 147500 * KHZ);
+    }
+    else if (i2s_clock_ratio == 12){
+        clock_configure_undivided(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 295 * MHZ);
+    }
 }
 
 /**
@@ -189,7 +203,7 @@ void i2s_mclk_set_pin(int data_pin, int clock_pin_base){
 }
 
 //ロージッターモードを使うときはuart,i2s,spi設定よりも先に呼び出す
-void i2s_mclk_set_config(PIO pio, uint sm, int dma_ch, bool use_core1, bool low_jitter, bool pt8211){
+void i2s_mclk_set_config(PIO pio, uint sm, int dma_ch, bool use_core1, bool low_jitter, bool overclock, bool pt8211){
     i2s_pio = pio;
     i2s_sm = sm;
     i2s_dma_chan = dma_ch;
@@ -199,6 +213,13 @@ void i2s_mclk_set_config(PIO pio, uint sm, int dma_ch, bool use_core1, bool low_
 
     //あらかじめclk_periをclk_sysから分離する
     if (i2s_low_jitter == true){
+        if (overclock == true){
+            i2s_clock_ratio = 12;
+        }
+        else{
+            i2s_clock_ratio = 6;
+        }
+        vreg_set_voltage(VREG_VOLTAGE_1_30);
         clock_configure_undivided(clk_peri, 0, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_USB, USB_CLK_HZ);
     }
 }
@@ -269,38 +290,27 @@ void i2s_mclk_init(uint32_t audio_clock){
     else{
         //sys_clk変更
         if (audio_clock % 48000 == 0){
-            set_sys_clock_172000khz();
-            if (i2s_pt8211 == false){
-                clock_gpio_init(21, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 7);
-            }
+            set_sys_clock_271mhz();
             clk_48khz = true;
         }
         else {
-            set_sys_clock_248400khz();
-            if (i2s_pt8211 == false){
-                clock_gpio_init(21, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 11);
-            }
+            set_sys_clock_295mhz();
             clk_48khz = false;
+        }
+
+        //mclk出力
+        if (i2s_pt8211 == false){
+            clock_gpio_init(21, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, i2s_clock_ratio);
         }
 
         //pio周波数変更
         uint dev;
         if (clk_48khz == true){
-            if (i2s_pt8211 == false){
-                dev = 7 * 192000 / audio_clock;
-            }
-            else{
-                dev = 7 * 384000 / audio_clock;
-            }
+            dev = i2s_clock_ratio * 384000 / audio_clock;
             pio_sm_set_clkdiv_int_frac(i2s_pio, i2s_sm, dev, 0);
         }
         else {
-            if (i2s_pt8211 == false){
-                dev = 11 * 176400 / audio_clock;
-            }
-            else{
-                dev = 11 * 352800 / audio_clock;
-            }
+            dev = i2s_clock_ratio * 352800 / audio_clock;
             pio_sm_set_clkdiv_int_frac(i2s_pio, i2s_sm, dev, 0);
         }
     }
@@ -387,38 +397,22 @@ void i2s_mclk_change_clock(uint32_t audio_clock){
     else{
         //sys_clk変更
         if (audio_clock % 48000 == 0 && clk_48khz == false){
-            set_sys_clock_172000khz();
-            if (i2s_pt8211 == false){
-                clock_gpio_init(21, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 7);
-            }
+            set_sys_clock_271mhz();
             clk_48khz = true;
         }
         else if (audio_clock % 48000 != 0 && clk_48khz == true){
-            set_sys_clock_248400khz();
-            if (i2s_pt8211 == false){
-                clock_gpio_init(21, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 11);
-            }
+            set_sys_clock_295mhz();
             clk_48khz = false;
         }
 
         //pio周波数変更
         uint dev;
         if (clk_48khz == true){
-            if (i2s_pt8211 == false){
-                dev = 7 * 192000 / audio_clock;
-            }
-            else{
-                dev = 7 * 384000 / audio_clock;
-            }
+            dev = i2s_clock_ratio * 384000 / audio_clock;
             pio_sm_set_clkdiv_int_frac(i2s_pio, i2s_sm, dev, 0);
         }
         else {
-            if (i2s_pt8211 == false){
-                dev = 11 * 176400 / audio_clock;
-            }
-            else{
-                dev = 11 * 352800 / audio_clock;
-            }
+            dev = i2s_clock_ratio * 352800 / audio_clock;
             pio_sm_set_clkdiv_int_frac(i2s_pio, i2s_sm, dev, 0);
         }
     }
