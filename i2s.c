@@ -2,8 +2,8 @@
  * @file i2s.c
  * @author BambooMaster (https://misskey.hakoniwa-project.com/@BambooMaster)
  * @brief pico-i2s-pio
- * @version 0.1
- * @date 2025-03-14
+ * @version 0.2
+ * @date 2025-04-06
  * 
  */
 
@@ -30,7 +30,7 @@ static uint i2s_sm              = 0;
 static int i2s_dma_chan         = 0;
 static bool i2s_use_core1       = false;
 static bool i2s_low_jitter      = false;
-static bool i2s_overclock     = 6;
+static bool i2s_overclock       = false;
 static bool i2s_pt8211          = false;
 
 static int8_t i2s_buf_length;

@@ -2,8 +2,8 @@
  * @file i2s.h
  * @author BambooMaster (https://misskey.hakoniwa-project.com/@BambooMaster)
  * @brief pico-i2s-pio
- * @version 0.1
- * @date 2025-03-14
+ * @version 0.2
+ * @date 2025-04-06
  * 
  */
 
@@ -14,7 +14,7 @@
 #define I2S_BUF_DEPTH   16
 #define I2S_START_LEVEL     I2S_BUF_DEPTH / 4
 #define I2S_TARGET_LEVEL    I2S_BUF_DEPTH / 2
-#define I2S_DATA_LEN    (192 + 1) * 2
+#define I2S_DATA_LEN    (384 + 1) * 2
 
 /**
  * @brief 再生状態の切り替わりを通知する関数の型
