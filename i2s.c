@@ -226,7 +226,9 @@ void i2s_mclk_set_config(PIO pio, uint sm, int dma_ch, bool use_core1, bool low_
 
     //あらかじめclk_periをclk_sysから分離する
     if (i2s_low_jitter == true){
-        vreg_set_voltage(VREG_VOLTAGE_1_30);
+        if (overclock == true){
+            vreg_set_voltage(VREG_VOLTAGE_1_30);
+        }
         clock_configure_undivided(clk_peri, 0, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_USB, USB_CLK_HZ);
     }
 }
