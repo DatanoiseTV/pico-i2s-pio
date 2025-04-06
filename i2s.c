@@ -172,7 +172,7 @@ static void defalut_core1_main(void){
     int32_t mute_buff[96 * 2] = {0};
     uint32_t mute_len = sizeof(mute_buff) / sizeof(int32_t);
     int8_t buf_length;
-    int32_t dma_buff[I2S_BUF_DEPTH][I2S_DATA_LEN];
+    static int32_t dma_buff[2][I2S_DATA_LEN];
     uint8_t dma_use = 0;
 
     while (1){
@@ -456,8 +456,8 @@ void i2s_mclk_change_clock(uint32_t audio_clock){
 //i2sのバッファにusb受信データを積む
 bool i2s_enqueue(uint8_t* in, int sample, uint8_t resolution){
     int i, j;
-    int32_t lch_buf[I2S_DATA_LEN / 2];
-    int32_t rch_buf[I2S_DATA_LEN / 2];
+    static int32_t lch_buf[I2S_DATA_LEN / 2];
+    static int32_t rch_buf[I2S_DATA_LEN / 2];
 
 	if (i2s_get_buf_length() < I2S_BUF_DEPTH){
         if (resolution == 16){
