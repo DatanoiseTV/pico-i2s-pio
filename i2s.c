@@ -239,9 +239,6 @@ void i2s_mclk_init(uint32_t audio_clock){
     uint sm = i2s_sm;
     uint data_pin = i2s_dout_pin;
     uint clock_pin_base = i2s_clk_pin_base;
-    uint func;
-    if (pio == pio0) func = GPIO_FUNC_PIO0;
-    else if (pio == pio1) func = GPIO_FUNC_PIO1;
     uint offset;
 
     //再生状態をGPIO25で通知
@@ -250,11 +247,11 @@ void i2s_mclk_init(uint32_t audio_clock){
         gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
     }
 
-    gpio_set_function(data_pin, func);
-    gpio_set_function(clock_pin_base, func);
-    gpio_set_function(clock_pin_base + 1, func);
+    pio_gpio_init(pio, data_pin);
+    pio_gpio_init(pio, clock_pin_base);
+    pio_gpio_init(pio, clock_pin_base + 1);
     if (i2s_low_jitter == false || i2s_pt8211 == false){
-        gpio_set_function(clock_pin_base + 2, func);
+        pio_gpio_init(pio, clock_pin_base + 2);
     }
 
     if (i2s_pt8211 == true){
@@ -270,13 +267,10 @@ void i2s_mclk_init(uint32_t audio_clock){
         sm_config = i2s_no_mclk_program_get_default_config(offset);
     }
     
-    
     sm_config_set_out_pins(&sm_config, data_pin, 1);
     sm_config_set_sideset_pins(&sm_config, clock_pin_base);
     sm_config_set_out_shift(&sm_config, false, false, 32);
     sm_config_set_fifo_join(&sm_config, PIO_FIFO_JOIN_TX);
-
-    sm_config_set_set_pins(&sm_config, data_pin, 1);
 
     if (i2s_use_core1 == true){
         queue_spin_lock = spin_lock_init(spin_lock_claim_unused(true));
@@ -351,9 +345,8 @@ void i2s_mclk_init(uint32_t audio_clock){
         pin_mask = (1u << data_pin) | (3u << clock_pin_base);
     }
     pio_sm_set_pindirs_with_mask(pio, sm, pin_mask, pin_mask);
-    pio_sm_set_pins(pio, sm, 1);
-
     pio_sm_exec(pio, sm, pio_encode_jmp(offset));
+    pio_sm_set_pins(pio, sm, 0);
     pio_sm_clear_fifos(pio, sm);
     pio_sm_set_enabled(pio, sm, true);
 
@@ -417,7 +410,7 @@ void i2s_mclk_change_clock(uint32_t audio_clock){
     }
     else if (i2s_low_jitter == false && i2s_pt8211 == true){
         float div;
-        div = (float)clock_get_hz(clk_sys) / (float)(audio_clock * 64);
+        div = (float)clock_get_hz(clk_sys) / (float)(audio_clock * 128);
         pio_sm_set_clkdiv(i2s_pio, i2s_sm, div);
     }
     else{
