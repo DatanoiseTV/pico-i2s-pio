@@ -274,9 +274,7 @@ void i2s_mclk_init(uint32_t audio_clock){
     sm_config_set_out_shift(&sm_config, false, false, 32);
     sm_config_set_fifo_join(&sm_config, PIO_FIFO_JOIN_TX);
 
-    if (i2s_use_core1 == true){
-        queue_spin_lock = spin_lock_init(spin_lock_claim_unused(true));
-    }
+    queue_spin_lock = spin_lock_init(spin_lock_claim_unused(true));
 
     i2s_buf_length = 0;
     enqueue_pos = 0;
@@ -385,25 +383,6 @@ void i2s_mclk_init(uint32_t audio_clock){
 }
 
 void i2s_mclk_change_clock(uint32_t audio_clock){
-    uint32_t save;
-    if (i2s_use_core1 == true){
-        save = spin_lock_blocking(queue_spin_lock);
-    }
-    else{
-        irq_set_enabled(DMA_IRQ_0, false);
-	}
-
-    i2s_buf_length = 0;
-    enqueue_pos = 0;
-    dequeue_pos = 0;
-
-    if (i2s_use_core1 == true){
-        spin_unlock(queue_spin_lock, save);
-    }
-    else{
-        irq_set_enabled(DMA_IRQ_0, true);
-    }
-
     //周波数変更
     if (i2s_low_jitter == false && i2s_pt8211 == false){
         float div;
@@ -514,22 +493,10 @@ bool i2s_enqueue(uint8_t* in, int sample, uint8_t resolution){
             enqueue_pos = 0;
         }
         
-        uint32_t save;
-        if (i2s_use_core1 == true){
-            save = spin_lock_blocking(queue_spin_lock);
-        }
-        else{
-            irq_set_enabled(DMA_IRQ_0, false);
-		}
-
+        uint32_t save = spin_lock_blocking(queue_spin_lock);
         i2s_buf_length++;
+        spin_unlock(queue_spin_lock, save);
 
-        if (i2s_use_core1 == true){
-            spin_unlock(queue_spin_lock, save);
-        }
-        else{
-            irq_set_enabled(DMA_IRQ_0, true);
-        }
 		return true;
 	}
 	else return false;
@@ -540,11 +507,12 @@ bool i2s_dequeue(int32_t** buff, int* sample){
         *buff = i2s_buf[dequeue_pos];
         *sample = i2s_sample[dequeue_pos];
 
-        uint32_t save = spin_lock_blocking(queue_spin_lock);
         dequeue_pos++;
         if (dequeue_pos >= I2S_BUF_DEPTH){
             dequeue_pos = 0;
         }
+
+        uint32_t save = spin_lock_blocking(queue_spin_lock);
         i2s_buf_length--;
         spin_unlock(queue_spin_lock, save);
 
@@ -555,22 +523,11 @@ bool i2s_dequeue(int32_t** buff, int* sample){
 
 int8_t i2s_get_buf_length(void){
     int8_t d;
-    uint32_t save;
-    if (i2s_use_core1 == true){
-        save = spin_lock_blocking(queue_spin_lock);
-    }
-    else{
-        irq_set_enabled(DMA_IRQ_0, false);
-	}
 
+    uint32_t save = spin_lock_blocking(queue_spin_lock);
 	d = i2s_buf_length;
+    spin_unlock(queue_spin_lock, save);
 
-    if (i2s_use_core1 == true){
-        spin_unlock(queue_spin_lock, save);
-    }
-    else{
-        irq_set_enabled(DMA_IRQ_0, true);
-    }
     return d;
 }
 
