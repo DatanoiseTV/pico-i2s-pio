@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * @file i2s.h
  * @author BambooMaster (https://misskey.hakoniwa-project.com/@BambooMaster)
