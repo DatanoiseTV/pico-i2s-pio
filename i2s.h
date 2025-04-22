@@ -13,10 +13,10 @@
 #define I2S_H
 #include "hardware/pio.h"
 
-#define I2S_BUF_DEPTH   16
-#define I2S_START_LEVEL     I2S_BUF_DEPTH / 4
-#define I2S_TARGET_LEVEL    I2S_BUF_DEPTH / 2
-#define I2S_DATA_LEN    (384 + 1) * 2
+#define I2S_BUF_DEPTH   8
+#define I2S_START_LEVEL     (I2S_BUF_DEPTH / 4)
+#define I2S_TARGET_LEVEL    (I2S_BUF_DEPTH / 2)
+#define I2S_DATA_LEN    ((384 + 1) * 2)
 
 /**
  * @brief 再生状態の切り替わりを通知する関数の型
