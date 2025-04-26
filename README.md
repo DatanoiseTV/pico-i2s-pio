@@ -7,14 +7,14 @@ Raspberry Pi Picoのpioを使ってMCLK対応のi2sを出力するライブラ�
 16,24,32bit 44.1kHz～384kHz
 ### i2s
 BCLK: 64fs
-MCLK: 22.581/24.571MHz or 256fs
+MCLK: 22.5792/24.576MHz
 
 |name|pin|
 |----|---|
 |DATA|data_pin|
 |LRCLK|clock_pin_base|
 |BCLK|clock_pin_base+1|
-|MCLK|clock_pin_base+2 or GPIO21|
+|MCLK|mclk_pin|
 
 ### PT8211
 BCLK: 32fs
@@ -39,7 +39,7 @@ MCLK: 32fs (BCK)
 |MCLK|clock_pin_base+2|
 
 ## MCLKについて
-MCLKはlowジッタモードがオンの場合は22.581/24.571MHzで固定、lowジッタモードオフの場合は256fs可変です。
+MCLKは22.5792/24.576MHzで固定です。
 
 EXDFモードの場合は、BCKと同じクロックが出力されます。
 
@@ -50,6 +50,6 @@ EXDFモードの場合は、BCKと同じクロックが出力されます。
 |name|pin|
 |----|---|
 |DATA|GPIO18|
-|LRCLK|GPIO19|
-|BCLK|GPIO20|
-|MCLK|GPIO21|
+|LRCLK|GPIO20|
+|BCLK|GPIO21|
+|MCLK|GPIO22|

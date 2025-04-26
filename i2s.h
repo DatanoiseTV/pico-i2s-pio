@@ -42,17 +42,17 @@ typedef void (*Core1MainFunction)(void);
  * 
  * @param data_pin data出力ピン
  * @param clock_pin_base LRCLK出力ピン
- * @note BCLK=clock_pin_base+1 MCLK=clock_pin_base+2
- * @note lowジッタモードを使用する場合はMCLKの出力ピンはGPIO21に固定される
+ * @param mclk_pin_pin LRCLK出力ピン
+ * @note BCLK=clock_pin_base+1
  * @note MODE_EXDFの場合、DOUTL = data_pin, DOUTR = data_pin + 1, WCK=clock_pin_base, BCK=clock_pin_base+1 MCLK=clock_pin_base+2
  */
-void i2s_mclk_set_pin(int data_pin, int clock_pin_base);
+void i2s_mclk_set_pin(uint data_pin, uint clock_pin_base, uint mclk_pin);
 
 /**
  * @brief i2sの設定を行う
  * 
  * @param pio i2sに使用するpio pio0 or pio1
- * @param sm i2sに使用するsm 0~3
+ * @param sm i2sに使用するsm0~2 (mclkはsm+1を使う)
  * @param dma_ch i2sに使用するdmaチャンネル
  * @param use_core1 pioのFIFOへデータを送る処理をcore1で行うかどうか
  * @param low_jitter lowジッタモードを使用するかどうか
