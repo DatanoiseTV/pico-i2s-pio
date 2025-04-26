@@ -18,6 +18,12 @@
 #define I2S_TARGET_LEVEL    (I2S_BUF_DEPTH / 2)
 #define I2S_DATA_LEN    ((384 + 1) * 2)
 
+typedef enum {
+    MODE_I2S,
+    MODE_PT8211,
+    MODE_EXDF
+} I2S_MODE;
+
 /**
  * @brief 再生状態の切り替わりを通知する関数の型
  * 
@@ -54,7 +60,7 @@ void i2s_mclk_set_pin(int data_pin, int clock_pin_base);
  * @note lowジッタモードを使用する場合はuart,i2s,spi設定よりも先に呼び出す
  * @note PT8211はBCLK32fsのlsbj16,MCLKなし
  */
-void i2s_mclk_set_config(PIO pio, uint sm, int dma_ch, bool use_core1, bool low_jitter, bool overclock, bool pt8211);
+void i2s_mclk_set_config(PIO pio, uint sm, int dma_ch, bool use_core1, bool low_jitter, bool overclock, I2S_MODE mode);
 
 /**
  * @brief i2sの初期化を行う

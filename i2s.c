@@ -33,7 +33,7 @@ static int i2s_dma_chan         = 0;
 static bool i2s_use_core1       = false;
 static bool i2s_low_jitter      = false;
 static bool i2s_overclock       = false;
-static bool i2s_pt8211          = false;
+static I2S_MODE i2s_mode        = MODE_I2S;
 
 static int8_t i2s_buf_length;
 static uint8_t enqueue_pos;
@@ -217,14 +217,14 @@ void i2s_mclk_set_pin(int data_pin, int clock_pin_base){
 }
 
 //ロージッターモードを使うときはuart,i2s,spi設定よりも先に呼び出す
-void i2s_mclk_set_config(PIO pio, uint sm, int dma_ch, bool use_core1, bool low_jitter, bool overclock, bool pt8211){
+void i2s_mclk_set_config(PIO pio, uint sm, int dma_ch, bool use_core1, bool low_jitter, bool overclock, I2S_MODE mode){
     i2s_pio = pio;
     i2s_sm = sm;
     i2s_dma_chan = dma_ch;
     i2s_use_core1 = use_core1;
     i2s_low_jitter = low_jitter;
     i2s_overclock = overclock;
-    i2s_pt8211 = pt8211;
+    i2s_mode = mode;
 
     //あらかじめclk_periをclk_sysから分離する
     if (i2s_low_jitter == true){
@@ -252,11 +252,11 @@ void i2s_mclk_init(uint32_t audio_clock){
     pio_gpio_init(pio, data_pin);
     pio_gpio_init(pio, clock_pin_base);
     pio_gpio_init(pio, clock_pin_base + 1);
-    if (i2s_low_jitter == false || i2s_pt8211 == false){
+    if (i2s_low_jitter == false && i2s_mode == MODE_I2S){
         pio_gpio_init(pio, clock_pin_base + 2);
     }
 
-    if (i2s_pt8211 == true){
+    if (i2s_mode == MODE_PT8211){
         offset = pio_add_program(pio, &i2s_pt8211_program);
         sm_config = i2s_pt8211_program_get_default_config(offset);
     }
@@ -280,12 +280,12 @@ void i2s_mclk_init(uint32_t audio_clock){
     enqueue_pos = 0;
     dequeue_pos = 0;
 
-    if (i2s_low_jitter == false && i2s_pt8211 == false){
+    if (i2s_low_jitter == false && i2s_mode == MODE_I2S){
         float div;
         div = (float)clock_get_hz(clk_sys) / (float)(audio_clock * 512);
         sm_config_set_clkdiv(&sm_config, div);
     }
-    else if (i2s_low_jitter == false && i2s_pt8211 == true){
+    else if (i2s_low_jitter == false && i2s_mode == MODE_PT8211){
         float div;
         div = (float)clock_get_hz(clk_sys) / (float)(audio_clock * 128);
         sm_config_set_clkdiv(&sm_config, div);
@@ -312,7 +312,7 @@ void i2s_mclk_init(uint32_t audio_clock){
         }
 
         //mclk出力
-        if (i2s_pt8211 == false){
+        if (i2s_mode == MODE_I2S){
             clock_gpio_init_int_frac8(21, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 12, 0);
         }
 
@@ -338,7 +338,7 @@ void i2s_mclk_init(uint32_t audio_clock){
     pio_sm_init(pio, sm, offset, &sm_config);
 
     uint pin_mask;
-    if (i2s_low_jitter == false || i2s_pt8211 == false){
+    if (i2s_low_jitter == false && i2s_mode == MODE_I2S){
         pin_mask = (1u << data_pin) | (7u << clock_pin_base);
     }
     else{
@@ -384,12 +384,12 @@ void i2s_mclk_init(uint32_t audio_clock){
 
 void i2s_mclk_change_clock(uint32_t audio_clock){
     //周波数変更
-    if (i2s_low_jitter == false && i2s_pt8211 == false){
+    if (i2s_low_jitter == false && i2s_mode == MODE_I2S){
         float div;
         div = (float)clock_get_hz(clk_sys) / (float)(audio_clock * 512);
         pio_sm_set_clkdiv(i2s_pio, i2s_sm, div);
     }
-    else if (i2s_low_jitter == false && i2s_pt8211 == true){
+    else if (i2s_low_jitter == false && i2s_mode == MODE_PT8211){
         float div;
         div = (float)clock_get_hz(clk_sys) / (float)(audio_clock * 128);
         pio_sm_set_clkdiv(i2s_pio, i2s_sm, div);
