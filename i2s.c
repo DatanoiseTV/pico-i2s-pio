@@ -199,8 +199,30 @@ static void defalut_core1_main(void){
         }
         
         //i2sバッファに格納
-        for (int i = 0; i < sample; i++){
-            dma_buff[dma_use][i] = buff[i];
+        if (i2s_mode == MODE_EXDF){
+            //メモリ初期化
+            for (int i = 0; i < sample; i++){
+                dma_buff[dma_use][i] = 0;
+            }
+
+            //並び替え
+            int k = 31;
+            int l = 0;
+            for (int i = 0; i < sample; i += 2){
+                for (int j = 31; j >= 0; j--){
+                    dma_buff[dma_use][l] |= ((buff[i    ] >> j) & 1u) << (k--);
+                    dma_buff[dma_use][l] |= ((buff[i + 1] >> j) & 1u) << (k--);
+                    if (k < 0){
+                        k = 31;
+                        l++;
+                    }
+                }
+            }
+        }
+        else {
+            for (int i = 0; i < sample; i++){
+                dma_buff[dma_use][i] = buff[i];
+            }
         }
         dma_sample[dma_use] = sample;
 
@@ -250,15 +272,22 @@ void i2s_mclk_init(uint32_t audio_clock){
     }
 
     pio_gpio_init(pio, data_pin);
+    if (i2s_mode == MODE_EXDF){
+        pio_gpio_init(pio, data_pin + 1);
+    }
     pio_gpio_init(pio, clock_pin_base);
     pio_gpio_init(pio, clock_pin_base + 1);
-    if (i2s_low_jitter == false && i2s_mode == MODE_I2S){
+    if ((i2s_low_jitter == false && i2s_mode == MODE_I2S) || i2s_mode == MODE_EXDF){
         pio_gpio_init(pio, clock_pin_base + 2);
     }
 
     if (i2s_mode == MODE_PT8211){
         offset = pio_add_program(pio, &i2s_pt8211_program);
         sm_config = i2s_pt8211_program_get_default_config(offset);
+    }
+    else if (i2s_mode == MODE_EXDF){
+        offset = pio_add_program(pio, &ak449x_exdf_program);
+        sm_config = ak449x_exdf_program_get_default_config(offset);
     }
     else if (i2s_low_jitter == false){
         offset = pio_add_program(pio, &i2s_mclk_256_program);
@@ -268,8 +297,12 @@ void i2s_mclk_init(uint32_t audio_clock){
         offset = pio_add_program(pio, &i2s_no_mclk_program);
         sm_config = i2s_no_mclk_program_get_default_config(offset);
     }
-    
-    sm_config_set_out_pins(&sm_config, data_pin, 1);
+    if (i2s_mode == MODE_EXDF){
+        sm_config_set_out_pins(&sm_config, data_pin, 2);
+    }
+    else{
+        sm_config_set_out_pins(&sm_config, data_pin, 1);
+    }
     sm_config_set_sideset_pins(&sm_config, clock_pin_base);
     sm_config_set_out_shift(&sm_config, false, false, 32);
     sm_config_set_fifo_join(&sm_config, PIO_FIFO_JOIN_TX);
@@ -285,7 +318,7 @@ void i2s_mclk_init(uint32_t audio_clock){
         div = (float)clock_get_hz(clk_sys) / (float)(audio_clock * 512);
         sm_config_set_clkdiv(&sm_config, div);
     }
-    else if (i2s_low_jitter == false && i2s_mode == MODE_PT8211){
+    else if ((i2s_low_jitter == false && i2s_mode == MODE_PT8211) || i2s_mode == MODE_EXDF){
         float div;
         div = (float)clock_get_hz(clk_sys) / (float)(audio_clock * 128);
         sm_config_set_clkdiv(&sm_config, div);
@@ -341,6 +374,9 @@ void i2s_mclk_init(uint32_t audio_clock){
     if (i2s_low_jitter == false && i2s_mode == MODE_I2S){
         pin_mask = (1u << data_pin) | (7u << clock_pin_base);
     }
+    else if (i2s_mode == MODE_EXDF){
+        pin_mask = (3u << data_pin) | (7u << clock_pin_base);
+    }
     else{
         pin_mask = (1u << data_pin) | (3u << clock_pin_base);
     }
@@ -389,7 +425,7 @@ void i2s_mclk_change_clock(uint32_t audio_clock){
         div = (float)clock_get_hz(clk_sys) / (float)(audio_clock * 512);
         pio_sm_set_clkdiv(i2s_pio, i2s_sm, div);
     }
-    else if (i2s_low_jitter == false && i2s_mode == MODE_PT8211){
+    else if ((i2s_low_jitter == false && i2s_mode == MODE_PT8211) || i2s_mode == MODE_EXDF){
         float div;
         div = (float)clock_get_hz(clk_sys) / (float)(audio_clock * 128);
         pio_sm_set_clkdiv(i2s_pio, i2s_sm, div);
@@ -482,11 +518,34 @@ bool i2s_enqueue(uint8_t* in, int sample, uint8_t resolution){
         }
 
         //i2sバッファに格納
-        j = 0;
-        for (i = 0; i < sample / 2; i++){
-            i2s_buf[enqueue_pos][j++] = lch_buf[i];
-            i2s_buf[enqueue_pos][j++] = rch_buf[i];
+        if (i2s_mode == MODE_EXDF){
+            //メモリ初期化
+            for (int i = 0; i < sample; i++){
+                i2s_buf[enqueue_pos][i] = 0;
+            }
+
+            //並び替え
+            int k = 31;
+            int l = 0;
+            for (int i = 0; i < sample / 2; i++){
+                for (int j = 31; j >= 0; j--){
+                    i2s_buf[enqueue_pos][l] |= ((lch_buf[i] >> j) & 1u) << (k--);
+                    i2s_buf[enqueue_pos][l] |= ((rch_buf[i] >> j) & 1u) << (k--);
+                    if (k < 0){
+                        k = 31;
+                        l++;
+                    }
+                }
+            }
         }
+        else {
+            j = 0;
+            for (i = 0; i < sample / 2; i++){
+                i2s_buf[enqueue_pos][j++] = lch_buf[i];
+                i2s_buf[enqueue_pos][j++] = rch_buf[i];
+            }
+        }
+        
         i2s_sample[enqueue_pos] = sample;
 		enqueue_pos++;
 		if (enqueue_pos >= I2S_BUF_DEPTH){

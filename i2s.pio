@@ -104,3 +104,32 @@ out pins, 1     side 0b00 [1]
 jmp x--, L2     side 0b10 [1]
 
 out pins, 1     side 0b00 [1]
+
+
+;i2s BCLK32fs AK449X EXDF
+.program ak449x_exdf
+.side_set 3
+;                      /---MCLK
+;                      |/--BCK
+;                      ||/-WCK
+;                      |||
+pull block      side 0b111 [1]
+
+out pins, 2     side 0b000 [1]
+set x, 13       side 0b110 [1]
+
+L1:
+out pins, 2     side 0b000 [1]
+jmp x--, L1     side 0b110 [1]
+
+out pins, 2     side 0b000 [1]
+pull block      side 0b110 [1]
+
+out pins, 2     side 0b001 [1]
+set x, 13       side 0b111 [1]
+
+L2:
+out pins, 2     side 0b001 [1]
+jmp x--, L2     side 0b111 [1]
+
+out pins, 2     side 0b001 [1]
