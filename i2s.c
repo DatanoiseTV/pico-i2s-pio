@@ -200,23 +200,16 @@ static void defalut_core1_main(void){
         
         //i2sバッファに格納
         if (i2s_mode == MODE_EXDF){
-            //メモリ初期化
-            for (int i = 0; i < sample; i++){
-                dma_buff[dma_use][i] = 0;
-            }
-
             //並び替え
-            int k = 31;
             int l = 0;
-            for (int i = 0; i < sample; i += 2){
-                for (int j = 31; j >= 0; j--){
-                    dma_buff[dma_use][l] |= ((buff[i    ] >> j) & 1u) << (k--);
-                    dma_buff[dma_use][l] |= ((buff[i + 1] >> j) & 1u) << (k--);
-                    if (k < 0){
-                        k = 31;
-                        l++;
-                    }
-                }
+            for (int i = 0, j = 0; i < sample; i += 2) {
+                uint64_t left  = part1by1_32(buff[i]);
+                uint64_t right = part1by1_32(buff[i + 1]);
+                
+                uint64_t merged = (left << 1) | right;
+        
+                dma_buff[dma_use][i] = (uint32_t)(merged >> 32);     // 上位32bit
+                dma_buff[dma_use][i + 1] = (uint32_t)(merged & 0xFFFFFFFF); // 下位32bit
             }
         }
         else {
@@ -519,23 +512,15 @@ bool i2s_enqueue(uint8_t* in, int sample, uint8_t resolution){
 
         //i2sバッファに格納
         if (i2s_mode == MODE_EXDF && i2s_use_core1 == false){
-            //メモリ初期化
-            for (int i = 0; i < sample; i++){
-                i2s_buf[enqueue_pos][i] = 0;
-            }
-
             //並び替え
-            int k = 31;
-            int l = 0;
-            for (int i = 0; i < sample / 2; i++){
-                for (int j = 31; j >= 0; j--){
-                    i2s_buf[enqueue_pos][l] |= ((lch_buf[i] >> j) & 1u) << (k--);
-                    i2s_buf[enqueue_pos][l] |= ((rch_buf[i] >> j) & 1u) << (k--);
-                    if (k < 0){
-                        k = 31;
-                        l++;
-                    }
-                }
+            for (int i = 0, j = 0; i < sample / 2; i++) {
+                uint64_t left  = part1by1_32(lch_buf[i]);
+                uint64_t right = part1by1_32(rch_buf[i]);
+                
+                uint64_t merged = (left << 1) | right;
+        
+                i2s_buf[enqueue_pos][j++] = (uint32_t)(merged >> 32);     // 上位32bit
+                i2s_buf[enqueue_pos][j++] = (uint32_t)(merged & 0xFFFFFFFF); // 下位32bit
             }
         }
         else {

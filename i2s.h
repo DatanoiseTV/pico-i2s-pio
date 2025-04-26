@@ -130,4 +130,19 @@ void set_playback_handler(ExternalFunction func);
  */
 void set_core1_main_function(Core1MainFunction func);
 
+/**
+ * @brief EXDFのLRのビットを交互に並び替える操作の高速化関数
+ * 
+ * @param x 入力
+ */
+__force_inline uint64_t part1by1_32(uint32_t x){
+    uint64_t res = x;
+    res = (res | (res << 16)) & 0x0000FFFF0000FFFFULL;
+    res = (res | (res << 8))  & 0x00FF00FF00FF00FFULL;
+    res = (res | (res << 4))  & 0x0F0F0F0F0F0F0F0FULL;
+    res = (res | (res << 2))  & 0x3333333333333333ULL;
+    res = (res | (res << 1))  & 0x5555555555555555ULL;
+    return res;
+}
+
 #endif
