@@ -518,7 +518,7 @@ bool i2s_enqueue(uint8_t* in, int sample, uint8_t resolution){
         }
 
         //i2sバッファに格納
-        if (i2s_mode == MODE_EXDF){
+        if (i2s_mode == MODE_EXDF && i2s_use_core1 == false){
             //メモリ初期化
             for (int i = 0; i < sample; i++){
                 i2s_buf[enqueue_pos][i] = 0;
