@@ -44,6 +44,7 @@ typedef void (*Core1MainFunction)(void);
  * @param clock_pin_base LRCLK出力ピン
  * @note BCLK=clock_pin_base+1 MCLK=clock_pin_base+2
  * @note lowジッタモードを使用する場合はMCLKの出力ピンはGPIO21に固定される
+ * @note MODE_EXDFの場合、DOUTL = data_pin, DOUTR = data_pin + 1, WCK=clock_pin_base, BCK=clock_pin_base+1 MCLK=clock_pin_base+2
  */
 void i2s_mclk_set_pin(int data_pin, int clock_pin_base);
 
@@ -56,9 +57,9 @@ void i2s_mclk_set_pin(int data_pin, int clock_pin_base);
  * @param use_core1 pioのFIFOへデータを送る処理をcore1で行うかどうか
  * @param low_jitter lowジッタモードを使用するかどうか
  * @param overclock オーバークロックを有効にするか (low_jitterモードのときのみ有効)
- * @param pt8211 pt8211を使用するか
+ * @param mode 出力するフォーマットを選択する (MODE_I2S, MODE_PT8211, MODE_EXDF)
  * @note lowジッタモードを使用する場合はuart,i2s,spi設定よりも先に呼び出す
- * @note PT8211はBCLK32fsのlsbj16,MCLKなし
+ * @note MODE_PT8211はBCLK32fsのlsbj16,MCLKなし
  */
 void i2s_mclk_set_config(PIO pio, uint sm, int dma_ch, bool use_core1, bool low_jitter, bool overclock, I2S_MODE mode);
 
