@@ -32,8 +32,7 @@ static uint i2s_sm              = 0;
 
 static int i2s_dma_chan         = 0;
 static bool i2s_use_core1       = false;
-static bool i2s_low_jitter      = false;
-static bool i2s_overclock       = false;
+static CLOCK_MODE i2s_clock_mode = CLOCK_MODE_DEFAULT;
 static I2S_MODE i2s_mode        = MODE_I2S;
 
 static int8_t i2s_buf_length;
@@ -234,20 +233,19 @@ void i2s_mclk_set_pin(uint data_pin, uint clock_pin_base, uint mclk_pin){
 }
 
 //ロージッターモードを使うときはuart,i2s,spi設定よりも先に呼び出す
-void i2s_mclk_set_config(PIO pio, uint sm, int dma_ch, bool use_core1, bool low_jitter, bool overclock, I2S_MODE mode){
+void i2s_mclk_set_config(PIO pio, uint sm, int dma_ch, bool use_core1, CLOCK_MODE clock_mode, I2S_MODE mode){
     i2s_pio = pio;
     i2s_sm = sm;
     i2s_dma_chan = dma_ch;
     i2s_use_core1 = use_core1;
-    i2s_low_jitter = low_jitter;
-    i2s_overclock = overclock;
+    i2s_clock_mode = clock_mode;
     i2s_mode = mode;
 
     //あらかじめclk_periをclk_sysから分離する
-    if (i2s_low_jitter == true){
-        if (overclock == true){
-            vreg_set_voltage(VREG_VOLTAGE_1_20);
-        }
+    if (i2s_clock_mode == CLOCK_MODE_LOW_JITTER_OC){
+        vreg_set_voltage(VREG_VOLTAGE_1_20);
+    }
+    if (i2s_clock_mode != CLOCK_MODE_DEFAULT){
         clock_configure_undivided(clk_peri, 0, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_USB, USB_CLK_HZ);
     }
 }
@@ -322,7 +320,7 @@ void i2s_mclk_init(uint32_t audio_clock){
     enqueue_pos = 0;
     dequeue_pos = 0;
 
-    if (i2s_low_jitter == false){
+    if (i2s_clock_mode == CLOCK_MODE_DEFAULT){
         float div;
         div = (float)clock_get_hz(clk_sys) / (float)(audio_clock * 128);
         sm_config_set_clkdiv(&sm_config, div);
@@ -339,46 +337,75 @@ void i2s_mclk_init(uint32_t audio_clock){
     else{
         //sys_clk変更
         if (audio_clock % 48000 == 0){
-            if (i2s_overclock == true){
-                set_sys_clock_295000khz();
-            }
-            else {
-                set_sys_clock_147500khz();
+            switch (i2s_clock_mode){
+                case CLOCK_MODE_LOW_JITTER:
+                    set_sys_clock_147500khz();
+                    break;
+                case CLOCK_MODE_LOW_JITTER_OC:
+                    set_sys_clock_295000khz();
+                    break;
+                case CLOCK_MODE_EXTERNAL:
+
+                    break;
             }
             clk_48khz = true;
         }
         else {
-            if (i2s_overclock == true){
-                set_sys_clock_271000khz();
-            }
-            else {
-                set_sys_clock_135500khz();
+            switch (i2s_clock_mode){
+                case CLOCK_MODE_LOW_JITTER:
+                    set_sys_clock_135500khz();
+                    break;
+                case CLOCK_MODE_LOW_JITTER_OC:
+                    set_sys_clock_271000khz();
+                    break;
+                case CLOCK_MODE_EXTERNAL:
+
+                    break;
             }
             clk_48khz = false;
         }
 
         //mclk出力
         if (i2s_mode == MODE_I2S){
-            if (i2s_overclock == true){
-                sm_config_set_clkdiv_int_frac8(&sm_config_mclk, 6, 0);
-            }
-            else{
-                sm_config_set_clkdiv_int_frac8(&sm_config_mclk, 3, 0);
+            switch (i2s_clock_mode){
+                case CLOCK_MODE_LOW_JITTER:
+                    sm_config_set_clkdiv_int_frac8(&sm_config_mclk, 3, 0);
+                    break;
+                case CLOCK_MODE_LOW_JITTER_OC:
+                    sm_config_set_clkdiv_int_frac8(&sm_config_mclk, 6, 0);
+                    break;
+                case CLOCK_MODE_EXTERNAL:
+
+                    break;
             }
         }
 
         //pio周波数変更
         uint dev;
         if (clk_48khz == true){
-            dev = 12 * 192000 / audio_clock;
-            if (i2s_overclock == false){
-                dev /= 2;
+            switch (i2s_clock_mode){
+                case CLOCK_MODE_LOW_JITTER:
+                    dev = 6 * 192000 / audio_clock;
+                    break;
+                case CLOCK_MODE_LOW_JITTER_OC:
+                    dev = 12 * 192000 / audio_clock;
+                    break;
+                case CLOCK_MODE_EXTERNAL:
+
+                    break;
             }
         }
         else {
-            dev = 12 * 192000 / audio_clock;
-            if (i2s_overclock == false){
-                dev /= 2;
+            switch (i2s_clock_mode){
+                case CLOCK_MODE_LOW_JITTER:
+                    dev = 6 * 176400 / audio_clock;
+                    break;
+                case CLOCK_MODE_LOW_JITTER_OC:
+                    dev = 12 * 176400 / audio_clock;
+                    break;
+                case CLOCK_MODE_EXTERNAL:
+
+                    break;
             }
         }
         sm_config_set_clkdiv_int_frac8(&sm_config, dev, 0);
@@ -439,7 +466,7 @@ void i2s_mclk_init(uint32_t audio_clock){
 
 void i2s_mclk_change_clock(uint32_t audio_clock){
     //周波数変更
-    if (i2s_low_jitter == false){
+    if (i2s_clock_mode == CLOCK_MODE_DEFAULT){
         float div;
         div = (float)clock_get_hz(clk_sys) / (float)(audio_clock * 128);
         pio_sm_set_clkdiv(i2s_pio, i2s_sm, div);
@@ -457,21 +484,31 @@ void i2s_mclk_change_clock(uint32_t audio_clock){
     }
     else{
         //sys_clk変更
-        if (audio_clock % 48000 == 0){
-            if (i2s_overclock == true){
-                set_sys_clock_295000khz();
-            }
-            else {
-                set_sys_clock_147500khz();
+        if (audio_clock % 48000 == 0 && clk_48khz == false){
+            switch (i2s_clock_mode){
+                case CLOCK_MODE_LOW_JITTER:
+                    set_sys_clock_147500khz();
+                    break;
+                case CLOCK_MODE_LOW_JITTER_OC:
+                    set_sys_clock_295000khz();
+                    break;
+                case CLOCK_MODE_EXTERNAL:
+
+                    break;
             }
             clk_48khz = true;
         }
-        else {
-            if (i2s_overclock == true){
-                set_sys_clock_271000khz();
-            }
-            else {
-                set_sys_clock_135500khz();
+        else if (audio_clock % 48000 != 0 && clk_48khz == true){
+            switch (i2s_clock_mode){
+                case CLOCK_MODE_LOW_JITTER:
+                    set_sys_clock_135500khz();
+                    break;
+                case CLOCK_MODE_LOW_JITTER_OC:
+                    set_sys_clock_271000khz();
+                    break;
+                case CLOCK_MODE_EXTERNAL:
+
+                    break;
             }
             clk_48khz = false;
         }
@@ -479,15 +516,29 @@ void i2s_mclk_change_clock(uint32_t audio_clock){
         //pio周波数変更
         uint dev;
         if (clk_48khz == true){
-            dev = 12 * 192000 / audio_clock;
-            if (i2s_overclock == false){
-                dev /= 2;
+            switch (i2s_clock_mode){
+                case CLOCK_MODE_LOW_JITTER:
+                    dev = 6 * 192000 / audio_clock;
+                    break;
+                case CLOCK_MODE_LOW_JITTER_OC:
+                    dev = 12 * 192000 / audio_clock;
+                    break;
+                case CLOCK_MODE_EXTERNAL:
+
+                    break;
             }
         }
         else {
-            dev = 12 * 176400 / audio_clock;
-            if (i2s_overclock == false){
-                dev /= 2;
+            switch (i2s_clock_mode){
+                case CLOCK_MODE_LOW_JITTER:
+                    dev = 6 * 176400 / audio_clock;
+                    break;
+                case CLOCK_MODE_LOW_JITTER_OC:
+                    dev = 12 * 176400 / audio_clock;
+                    break;
+                case CLOCK_MODE_EXTERNAL:
+
+                    break;
             }
         }
         pio_sm_set_clkdiv_int_frac(i2s_pio, i2s_sm, dev, 0);
