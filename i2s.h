@@ -63,7 +63,7 @@ void i2s_mclk_set_pin(uint data_pin, uint clock_pin_base, uint mclk_pin);
  * @param sm i2sに使用するsm0~2 (mclkはsm+1を使う)
  * @param dma_ch i2sに使用するdmaチャンネル
  * @param use_core1 pioのFIFOへデータを送る処理をcore1で行うかどうか
- * @param clock_mode クロックモードの選択 (CLOCK_MODE_DEFAULT, CLOCK_MODE_LOW_JITTER, CLOCK_MODE_LOW_JITTER_OC)
+ * @param clock_mode クロックモードの選択 (CLOCK_MODE_DEFAULT, CLOCK_MODE_LOW_JITTER, CLOCK_MODE_LOW_JITTER_OC, CLOCK_MODE_EXTERNAL)
  * @param mode 出力するフォーマットを選択する (MODE_I2S, MODE_PT8211, MODE_EXDF)
  * @note lowジッタモードを使用する場合はuart,i2s,spi設定よりも先に呼び出す
  * @note MODE_PT8211はBCLK32fsのlsbj16,MCLKなし

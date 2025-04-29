@@ -129,6 +129,28 @@ static void set_sys_clock_147500khz(void){
 }
 
 /**
+ * @brief システムクロックをgpin0に設定する
+ * 
+ * @note gpin0 = 45.1584MHz
+ */
+static void set_sys_clock_gpin0(void){
+    while (running_on_fpga()) tight_loop_contents();
+    clock_configure_undivided(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_USB, USB_CLK_HZ);
+    clock_configure_gpin(clk_sys, 20, 45158400, 45158400);
+}
+
+/**
+ * @brief システムクロックをgpin1に設定する
+ * 
+ * @note gpin1 = 49.152MHz
+ */
+static void set_sys_clock_gpin1(void){
+    while (running_on_fpga()) tight_loop_contents();
+    clock_configure_undivided(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_USB, USB_CLK_HZ);
+    clock_configure_gpin(clk_sys, 22, 49152 * KHZ, 49152 * KHZ);
+}
+
+/**
  * @brief i2sのバッファからデータを取り出すハンドラ
  * 
  * @note use_core1がfalseのときに呼び出される
@@ -347,7 +369,7 @@ void i2s_mclk_init(uint32_t audio_clock){
                     set_sys_clock_295000khz();
                     break;
                 case CLOCK_MODE_EXTERNAL:
-
+                    set_sys_clock_gpin1();
                     break;
             }
             clk_48khz = true;
@@ -361,7 +383,7 @@ void i2s_mclk_init(uint32_t audio_clock){
                     set_sys_clock_271000khz();
                     break;
                 case CLOCK_MODE_EXTERNAL:
-
+                    set_sys_clock_gpin0();
                     break;
             }
             clk_48khz = false;
@@ -377,7 +399,7 @@ void i2s_mclk_init(uint32_t audio_clock){
                     sm_config_set_clkdiv_int_frac8(&sm_config_mclk, 6, 0);
                     break;
                 case CLOCK_MODE_EXTERNAL:
-
+                    sm_config_set_clkdiv_int_frac8(&sm_config_mclk, 1, 0);
                     break;
             }
         }
@@ -393,7 +415,7 @@ void i2s_mclk_init(uint32_t audio_clock){
                     dev = 12 * 192000 / audio_clock;
                     break;
                 case CLOCK_MODE_EXTERNAL:
-
+                    dev = 2 * 192000 / audio_clock;
                     break;
             }
         }
@@ -406,7 +428,7 @@ void i2s_mclk_init(uint32_t audio_clock){
                     dev = 12 * 176400 / audio_clock;
                     break;
                 case CLOCK_MODE_EXTERNAL:
-
+                    dev = 2 * 176400 / audio_clock;
                     break;
             }
         }
@@ -498,7 +520,7 @@ void i2s_mclk_change_clock(uint32_t audio_clock){
                     set_sys_clock_295000khz();
                     break;
                 case CLOCK_MODE_EXTERNAL:
-
+                    set_sys_clock_gpin1();
                     break;
             }
             clk_48khz = true;
@@ -512,7 +534,7 @@ void i2s_mclk_change_clock(uint32_t audio_clock){
                     set_sys_clock_271000khz();
                     break;
                 case CLOCK_MODE_EXTERNAL:
-
+                    set_sys_clock_gpin0();
                     break;
             }
             clk_48khz = false;
@@ -529,7 +551,7 @@ void i2s_mclk_change_clock(uint32_t audio_clock){
                     dev = 12 * 192000 / audio_clock;
                     break;
                 case CLOCK_MODE_EXTERNAL:
-
+                    dev = 2 * 192000 / audio_clock;
                     break;
             }
         }
@@ -542,7 +564,7 @@ void i2s_mclk_change_clock(uint32_t audio_clock){
                     dev = 12 * 176400 / audio_clock;
                     break;
                 case CLOCK_MODE_EXTERNAL:
-
+                    dev = 2 * 176400 / audio_clock;
                     break;
             }
         }
