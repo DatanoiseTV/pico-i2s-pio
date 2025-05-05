@@ -234,7 +234,7 @@ static void defalut_core1_main(void){
                 dma_buff[dma_use][i + 1] = (uint32_t)(merged & 0xFFFFFFFF); // 下位32bit
             }
         }
-        else if (i2s_mode == MODE_PT8211_DUAL){
+        else if (i2s_mode == MODE_PT8211_DUAL || i2s_mode == MODE_I2S_DUAL){
             //並び替え
             for (int i = 0, j = 0; i < sample; i += 2) {
                 //
@@ -360,6 +360,10 @@ void i2s_mclk_init(uint32_t audio_clock){
         offset = pio_add_program(pio, &i2s_exdf_program);
         sm_config = i2s_exdf_program_get_default_config(offset);
         break;
+    case MODE_I2S_DUAL:
+        offset = pio_add_program(pio, &i2s_data_dual_program);
+        sm_config = i2s_data_dual_program_get_default_config(offset);
+        break;
     case MODE_PT8211_DUAL:
         offset = pio_add_program(pio, &i2s_pt8211_dual_program);
         sm_config = i2s_pt8211_dual_program_get_default_config(offset);
@@ -368,7 +372,7 @@ void i2s_mclk_init(uint32_t audio_clock){
         break;
     }
 
-    if (i2s_mode == MODE_EXDF || i2s_mode == MODE_PT8211_DUAL){
+    if (i2s_mode == MODE_EXDF || i2s_mode == MODE_PT8211_DUAL || i2s_mode == MODE_I2S_DUAL){
         sm_config_set_out_pins(&sm_config, data_pin, 2);
     }
     else{
@@ -489,7 +493,7 @@ void i2s_mclk_init(uint32_t audio_clock){
     if (i2s_mode == MODE_EXDF){
         pin_mask = (3u << data_pin) | (7u << clock_pin_base);
     }
-    else if (i2s_mode == MODE_PT8211_DUAL){
+    else if (i2s_mode == MODE_PT8211_DUAL || i2s_mode == MODE_I2S_DUAL){
         pin_mask = (3u << data_pin) | (3u << clock_pin_base);
     }
     else{
@@ -677,7 +681,7 @@ bool i2s_enqueue(uint8_t* in, int sample, uint8_t resolution){
                 i2s_buf[enqueue_pos][j++] = (uint32_t)(merged & 0xFFFFFFFF); // 下位32bit
             }
         }
-        else if (i2s_mode == MODE_PT8211_DUAL && i2s_use_core1 == false){
+        else if ((i2s_mode == MODE_PT8211_DUAL || i2s_mode == MODE_I2S_DUAL) && i2s_use_core1 == false){
             //並び替え
             for (int i = 0, j = 0; i < sample / 2; i++) {
                 //

@@ -101,6 +101,55 @@ jmp x--, L2     side 0b111 [1]
 out pins, 2     side 0b001 [1]
 
 
+;i2s BCLK64fs MCLK NO DUAL
+.program i2s_data_dual
+.side_set 2
+;                      /--BCK
+;                      |/-WS
+;                      ||
+pull block      side 0b10
+
+out pins, 2     side 0b00
+set x, 13       side 0b10
+
+L1:
+out pins, 2     side 0b00
+jmp x--, L1     side 0b10
+
+out pins, 2     side 0b00 
+pull block      side 0b10
+
+out pins, 2     side 0b00
+set x, 13       side 0b10
+
+L2:
+out pins, 2     side 0b00
+jmp x--, L2     side 0b10
+
+out pins, 2     side 0b01
+pull block      side 0b11
+
+out pins, 2     side 0b01
+set x, 13       side 0b11
+
+L3:
+out pins, 2     side 0b01
+jmp x--, L3     side 0b11
+
+out pins, 2     side 0b01
+pull block      side 0b11
+
+out pins, 2     side 0b01
+set x, 13       side 0b11
+
+L4:
+out pins, 2     side 0b01
+jmp x--, L4     side 0b11
+
+out pins, 2     side 0b00
+
+
+
 ;lsbj16_dual
 .program i2s_pt8211_dual
 .side_set 2

@@ -22,6 +22,7 @@ typedef enum {
     MODE_I2S,
     MODE_PT8211,
     MODE_EXDF,
+    MODE_I2S_DUAL,
     MODE_PT8211_DUAL
 } I2S_MODE;
 
