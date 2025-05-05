@@ -325,7 +325,7 @@ void i2s_mclk_init(uint32_t audio_clock){
 
     //data pin
     pio_gpio_init(pio, data_pin);
-    if (i2s_mode == MODE_EXDF || i2s_mode == MODE_PT8211_DUAL){
+    if (i2s_mode == MODE_EXDF || i2s_mode == MODE_PT8211_DUAL || i2s_mode == MODE_I2S_DUAL){
         pio_gpio_init(pio, data_pin + 1);
     }
 
@@ -337,7 +337,7 @@ void i2s_mclk_init(uint32_t audio_clock){
     if (i2s_mode == MODE_EXDF){
         pio_gpio_init(pio, clock_pin_base + 2);
     }
-    else if(i2s_mode == MODE_I2S){
+    else if(i2s_mode == MODE_I2S || i2s_mode == MODE_I2S_DUAL){
         pio_gpio_init(pio, i2s_mclk_pin);
 
         pio_sm_set_consecutive_pindirs(pio, sm + 1, i2s_mclk_pin, 1, true);
@@ -394,15 +394,17 @@ void i2s_mclk_init(uint32_t audio_clock){
         sm_config_set_clkdiv(&sm_config, div);
 
         //mclk
-        if (audio_clock % 48000 == 0){
-            div = (float)clock_get_hz(clk_sys) / (49.152f * (float)MHZ);
-            clk_48khz == true;
+        if (i2s_mode == MODE_I2S || i2s_mode == MODE_I2S_DUAL){
+            if (audio_clock % 48000 == 0){
+                div = (float)clock_get_hz(clk_sys) / (49.152f * (float)MHZ);
+                clk_48khz == true;
+            }
+            else{
+                div = (float)clock_get_hz(clk_sys) / (45.1584f * (float)MHZ);
+                clk_48khz == false;
+            }
+            sm_config_set_clkdiv(&sm_config_mclk, div);
         }
-        else{
-            div = (float)clock_get_hz(clk_sys) / (45.1584f * (float)MHZ);
-            clk_48khz == false;
-        }
-        sm_config_set_clkdiv(&sm_config_mclk, div);
     }
     else{
         //sys_clk変更
@@ -436,7 +438,7 @@ void i2s_mclk_init(uint32_t audio_clock){
         }
 
         //mclk出力
-        if (i2s_mode == MODE_I2S){
+        if (i2s_mode == MODE_I2S || i2s_mode == MODE_I2S_DUAL){
             switch (i2s_clock_mode){
                 case CLOCK_MODE_LOW_JITTER:
                     sm_config_set_clkdiv_int_frac8(&sm_config_mclk, 3, 0);
@@ -482,7 +484,7 @@ void i2s_mclk_init(uint32_t audio_clock){
     }
 
     //mclk start
-    if(i2s_mode == MODE_I2S){
+    if(i2s_mode == MODE_I2S || i2s_mode == MODE_I2S_DUAL){
         pio_sm_init(pio, sm + 1, offset_mclk, &sm_config_mclk);
         pio_sm_set_enabled(pio, sm + 1, true);
     }
@@ -545,7 +547,7 @@ void i2s_mclk_change_clock(uint32_t audio_clock){
         pio_sm_set_clkdiv(i2s_pio, i2s_sm, div);
 
         //mclk
-        if (i2s_mode == MODE_I2S){
+        if (i2s_mode == MODE_I2S || i2s_mode == MODE_I2S_DUAL){
             if (audio_clock % 48000 == 0 && clk_48khz == false){
                 div = (float)clock_get_hz(clk_sys) / (49.152f * (float)MHZ);
                 pio_sm_set_clkdiv(i2s_pio, i2s_sm + 1, div);
