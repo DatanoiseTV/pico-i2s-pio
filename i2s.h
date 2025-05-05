@@ -16,12 +16,13 @@
 #define I2S_BUF_DEPTH   8
 #define I2S_START_LEVEL     (I2S_BUF_DEPTH / 4)
 #define I2S_TARGET_LEVEL    (I2S_BUF_DEPTH / 2)
-#define I2S_DATA_LEN    ((384 + 1) * 2)
+#define I2S_DATA_LEN    ((384 + 1) * 2 * 2)
 
 typedef enum {
     MODE_I2S,
     MODE_PT8211,
-    MODE_EXDF
+    MODE_EXDF,
+    MODE_PT8211_DUAL
 } I2S_MODE;
 
 typedef enum {

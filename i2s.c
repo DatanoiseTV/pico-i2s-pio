@@ -234,6 +234,43 @@ static void defalut_core1_main(void){
                 dma_buff[dma_use][i + 1] = (uint32_t)(merged & 0xFFFFFFFF); // 下位32bit
             }
         }
+        else if (i2s_mode == MODE_PT8211_DUAL){
+            //並び替え
+            for (int i = 0, j = 0; i < sample; i += 2) {
+                //
+                uint64_t tmp1, tmp2, merged;
+                int32_t d_r, d_l;
+                tmp1 = part1by1_32(buff[i]);
+                tmp2 = part1by1_32(buff[i + 1]);
+                
+                merged = (tmp1 << 1) | tmp2;
+        
+                dma_buff[dma_use][j++] = (uint32_t)(merged >> 32);     // 上位32bit
+                dma_buff[dma_use][j++] = (uint32_t)(merged & 0xFFFFFFFF); // 下位32bit
+
+                //反転
+                if (buff[i] == INT32_MIN){
+                    d_l = INT32_MAX;
+                }
+                else{
+                    d_l = -buff[i];
+                }
+                if (buff[i + 1] == INT32_MIN){
+                    d_r = INT32_MAX;
+                }
+                else{
+                    d_r = -buff[i + 1];
+                }
+                tmp1 = part1by1_32(d_l);
+                tmp2 = part1by1_32(d_r);
+                
+                merged = (tmp1 << 1) | tmp2;
+        
+                dma_buff[dma_use][j++] = (uint32_t)(merged >> 32);     // 上位32bit
+                dma_buff[dma_use][j++] = (uint32_t)(merged & 0xFFFFFFFF); // 下位32bit
+            }
+            sample *= 2;
+        }
         else {
             for (int i = 0; i < sample; i++){
                 dma_buff[dma_use][i] = buff[i];
@@ -288,7 +325,7 @@ void i2s_mclk_init(uint32_t audio_clock){
 
     //data pin
     pio_gpio_init(pio, data_pin);
-    if (i2s_mode == MODE_EXDF){
+    if (i2s_mode == MODE_EXDF || i2s_mode == MODE_PT8211_DUAL){
         pio_gpio_init(pio, data_pin + 1);
     }
 
@@ -322,11 +359,16 @@ void i2s_mclk_init(uint32_t audio_clock){
     case MODE_EXDF:
         offset = pio_add_program(pio, &i2s_exdf_program);
         sm_config = i2s_exdf_program_get_default_config(offset);
+        break;
+    case MODE_PT8211_DUAL:
+        offset = pio_add_program(pio, &i2s_pt8211_dual_program);
+        sm_config = i2s_pt8211_dual_program_get_default_config(offset);
+        break;
     default:
         break;
     }
 
-    if (i2s_mode == MODE_EXDF){
+    if (i2s_mode == MODE_EXDF || i2s_mode == MODE_PT8211_DUAL){
         sm_config_set_out_pins(&sm_config, data_pin, 2);
     }
     else{
@@ -631,6 +673,43 @@ bool i2s_enqueue(uint8_t* in, int sample, uint8_t resolution){
                 i2s_buf[enqueue_pos][j++] = (uint32_t)(merged >> 32);     // 上位32bit
                 i2s_buf[enqueue_pos][j++] = (uint32_t)(merged & 0xFFFFFFFF); // 下位32bit
             }
+        }
+        else if (i2s_mode == MODE_PT8211_DUAL && i2s_use_core1 == false){
+            //並び替え
+            for (int i = 0, j = 0; i < sample / 2; i++) {
+                //
+                uint64_t tmp1, tmp2, merged;
+                int32_t d_r, d_l;
+                tmp1 = part1by1_32(lch_buf[i]);
+                tmp2 = part1by1_32(rch_buf[i]);
+                
+                merged = (tmp1 << 1) | tmp2;
+        
+                i2s_buf[enqueue_pos][j++] = (uint32_t)(merged >> 32);     // 上位32bit
+                i2s_buf[enqueue_pos][j++] = (uint32_t)(merged & 0xFFFFFFFF); // 下位32bit
+
+                //反転
+                if (lch_buf[i] == INT32_MIN){
+                    d_l = INT32_MAX;
+                }
+                else{
+                    d_l = -lch_buf[i];
+                }
+                if (rch_buf[i] == INT32_MIN){
+                    d_r = INT32_MAX;
+                }
+                else{
+                    d_r = -rch_buf[i];
+                }
+                tmp1 = part1by1_32(d_l);
+                tmp2 = part1by1_32(d_r);
+                
+                merged = (tmp1 << 1) | tmp2;
+        
+                i2s_buf[enqueue_pos][j++] = (uint32_t)(merged >> 32);     // 上位32bit
+                i2s_buf[enqueue_pos][j++] = (uint32_t)(merged & 0xFFFFFFFF); // 下位32bit
+            }
+            sample *= 2;
         }
         else {
             j = 0;
