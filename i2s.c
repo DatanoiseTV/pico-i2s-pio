@@ -489,6 +489,9 @@ void i2s_mclk_init(uint32_t audio_clock){
     if (i2s_mode == MODE_EXDF){
         pin_mask = (3u << data_pin) | (7u << clock_pin_base);
     }
+    else if (i2s_mode == MODE_PT8211_DUAL){
+        pin_mask = (3u << data_pin) | (3u << clock_pin_base);
+    }
     else{
         pin_mask = (1u << data_pin) | (3u << clock_pin_base);
     }
