@@ -1,0 +1,63 @@
+# Syntax coloring for PicoI2SPIO library
+# KEYWORD1 = datatypes and classes (orange)
+# KEYWORD2 = methods and functions (orange)
+# KEYWORD3 = setup, loop, etc (blue)
+# LITERAL1 = constants (blue)
+
+# Classes
+PicoI2SPIO	KEYWORD1
+
+# Methods
+begin	KEYWORD2
+beginAdvanced	KEYWORD2
+end	KEYWORD2
+write	KEYWORD2
+writeStereo	KEYWORD2
+availableForWrite	KEYWORD2
+isFull	KEYWORD2
+flush	KEYWORD2
+setVolume	KEYWORD2
+setVolumeDB	KEYWORD2
+setSampleRate	KEYWORD2
+getSampleRate	KEYWORD2
+getBitDepth	KEYWORD2
+isInitialized	KEYWORD2
+setPlaybackHandler	KEYWORD2
+floatToInt16	KEYWORD2
+floatToInt32	KEYWORD2
+floatToInt24	KEYWORD2
+
+# Core library functions
+i2s_mclk_set_pin	KEYWORD2
+i2s_mclk_set_config	KEYWORD2
+i2s_mclk_init	KEYWORD2
+i2s_mclk_change_clock	KEYWORD2
+i2s_enqueue	KEYWORD2
+i2s_dequeue	KEYWORD2
+i2s_get_buf_length	KEYWORD2
+i2s_volume_change	KEYWORD2
+set_playback_handler	KEYWORD2
+set_core1_main_function	KEYWORD2
+
+# Constants - Clock Modes
+CLOCK_MODE_DEFAULT	LITERAL1
+CLOCK_MODE_LOW_JITTER_LOW	LITERAL1
+CLOCK_MODE_LOW_JITTER	LITERAL1
+CLOCK_MODE_LOW_JITTER_OC	LITERAL1
+CLOCK_MODE_EXTERNAL	LITERAL1
+
+# Constants - I2S Modes
+MODE_I2S	LITERAL1
+MODE_PT8211	LITERAL1
+MODE_EXDF	LITERAL1
+MODE_I2S_DUAL	LITERAL1
+MODE_PT8211_DUAL	LITERAL1
+
+# Constants - Buffer
+I2S_BUF_DEPTH	LITERAL1
+I2S_START_LEVEL	LITERAL1
+I2S_TARGET_LEVEL	LITERAL1
+I2S_DATA_LEN	LITERAL1
+
+# Instance
+I2S	KEYWORD1
