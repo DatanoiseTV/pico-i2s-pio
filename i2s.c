@@ -61,10 +61,10 @@ static const int32_t db_to_vol[101] = {
 };
 
 /**
- * @brief set_playback_stateのデフォルトハンドラ
- * 
- * @param state 再生状態 true:再生開始 false:再生停止
- * @note PICO_DEFAULT_LED_PINで通知
+ * @brief Default handler for set_playback_state
+ *
+ * @param state Playback state true:playback started false:playback stopped
+ * @note Notifies via PICO_DEFAULT_LED_PIN
  */
 static inline void default_playback_handler(bool state){
     gpio_put(PICO_DEFAULT_LED_PIN, state);
@@ -72,18 +72,18 @@ static inline void default_playback_handler(bool state){
 static ExternalFunction playback_handler = default_playback_handler;
 
 /**
- * @brief i2s再生状態の切り替わりを通知する
- * 
- * @param state 再生状態 true:再生開始 false:再生停止
+ * @brief Notify i2s playback state changes
+ *
+ * @param state Playback state true:playback started false:playback stopped
  */
 static inline void set_playback_state(bool state){
     playback_handler(state);
 }
 
 /**
- * @brief システムクロックを271MHzに設定する
- * 
- * @note 44.1kHz系 271 / 12 = 22.583MHz
+ * @brief Set system clock to 271MHz
+ *
+ * @note 44.1kHz family 271 / 12 = 22.583MHz
  */
 static void set_sys_clock_271000khz(void){
     while (running_on_fpga()) tight_loop_contents();
@@ -93,9 +93,9 @@ static void set_sys_clock_271000khz(void){
 }
 
 /**
- * @brief システムクロックを135.5MHzに設定する
- * 
- * @note 44.1kHz系 135.5 / 6 = 22.583MHz
+ * @brief Set system clock to 135.5MHz
+ *
+ * @note 44.1kHz family 135.5 / 6 = 22.583MHz
  */
 static void set_sys_clock_135500khz(void){
     while (running_on_fpga()) tight_loop_contents();
@@ -105,9 +105,9 @@ static void set_sys_clock_135500khz(void){
 }
 
 /**
- * @brief システムクロックを295MHzに設定する
- * 
- * @note 48kHz系 295 / 12 = 24.583MHz
+ * @brief Set system clock to 295MHz
+ *
+ * @note 48kHz family 295 / 12 = 24.583MHz
  */
 static void set_sys_clock_295000khz(void){
     while (running_on_fpga()) tight_loop_contents();
@@ -117,9 +117,9 @@ static void set_sys_clock_295000khz(void){
 }
 
 /**
- * @brief システムクロックを147.5MHzに設定する
- * 
- * @note 48kHz系 147.5 / 6 = 24.583MHz
+ * @brief Set system clock to 147.5MHz
+ *
+ * @note 48kHz family 147.5 / 6 = 24.583MHz
  */
 static void set_sys_clock_147500khz(void){
     while (running_on_fpga()) tight_loop_contents();
@@ -129,8 +129,8 @@ static void set_sys_clock_147500khz(void){
 }
 
 /**
- * @brief システムクロックをgpin0に設定する
- * 
+ * @brief Set system clock to gpin0
+ *
  * @note gpin0 = 45.1584MHz
  */
 static void set_sys_clock_gpin0(void){
@@ -140,8 +140,8 @@ static void set_sys_clock_gpin0(void){
 }
 
 /**
- * @brief システムクロックをgpin1に設定する
- * 
+ * @brief Set system clock to gpin1
+ *
  * @note gpin1 = 49.152MHz
  */
 static void set_sys_clock_gpin1(void){
@@ -151,9 +151,9 @@ static void set_sys_clock_gpin1(void){
 }
 
 /**
- * @brief i2sのバッファからデータを取り出すハンドラ
- * 
- * @note use_core1がfalseのときに呼び出される
+ * @brief Handler for retrieving data from i2s buffer
+ *
+ * @note Called when use_core1 is false
  */
 static void __isr __time_critical_func(i2s_handler)(){
 	static bool mute;
@@ -185,9 +185,9 @@ static void __isr __time_critical_func(i2s_handler)(){
 }
 
 /**
- * @brief core1のメイン関数
- * 
- * @note use_core1がtrueのときに呼び出される
+ * @brief Main function for core1
+ *
+ * @note Called when use_core1 is true
  */
 static void defalut_core1_main(void){
     int32_t* buff;
@@ -220,9 +220,9 @@ static void defalut_core1_main(void){
             sample = mute_len;
         }
         
-        //i2sバッファに格納
+        //Store in i2s buffer
         if (i2s_mode == MODE_EXDF){
-            //並び替え
+            //Rearrange
             int l = 0;
             for (int i = 0, j = 0; i < sample; i += 2) {
                 uint64_t left  = part1by1_32(buff[i]);
@@ -230,12 +230,12 @@ static void defalut_core1_main(void){
                 
                 uint64_t merged = (left << 1) | right;
         
-                dma_buff[dma_use][i] = (uint32_t)(merged >> 32);     // 上位32bit
-                dma_buff[dma_use][i + 1] = (uint32_t)(merged & 0xFFFFFFFF); // 下位32bit
+                dma_buff[dma_use][i] = (uint32_t)(merged >> 32);     // Upper 32bits
+                dma_buff[dma_use][i + 1] = (uint32_t)(merged & 0xFFFFFFFF); // Lower 32bits
             }
         }
         else if (i2s_mode == MODE_PT8211_DUAL || i2s_mode == MODE_I2S_DUAL){
-            //並び替え
+            //Rearrange
             for (int i = 0, j = 0; i < sample; i += 2) {
                 //
                 uint64_t tmp1, tmp2, merged;
@@ -245,10 +245,10 @@ static void defalut_core1_main(void){
                 
                 merged = (tmp1 << 1) | tmp2;
         
-                dma_buff[dma_use][j++] = (uint32_t)(merged >> 32);     // 上位32bit
-                dma_buff[dma_use][j++] = (uint32_t)(merged & 0xFFFFFFFF); // 下位32bit
+                dma_buff[dma_use][j++] = (uint32_t)(merged >> 32);     // Upper 32bits
+                dma_buff[dma_use][j++] = (uint32_t)(merged & 0xFFFFFFFF); // Lower 32bits
 
-                //反転
+                //Invert
                 if (buff[i] == INT32_MIN){
                     d_l = INT32_MAX;
                 }
@@ -266,8 +266,8 @@ static void defalut_core1_main(void){
                 
                 merged = (tmp1 << 1) | tmp2;
         
-                dma_buff[dma_use][j++] = (uint32_t)(merged >> 32);     // 上位32bit
-                dma_buff[dma_use][j++] = (uint32_t)(merged & 0xFFFFFFFF); // 下位32bit
+                dma_buff[dma_use][j++] = (uint32_t)(merged >> 32);     // Upper 32bits
+                dma_buff[dma_use][j++] = (uint32_t)(merged & 0xFFFFFFFF); // Lower 32bits
             }
             sample *= 2;
         }
@@ -291,7 +291,7 @@ void i2s_mclk_set_pin(uint data_pin, uint clock_pin_base, uint mclk_pin){
     i2s_mclk_pin = mclk_pin;
 }
 
-//ロージッターモードを使うときはuart,i2s,spi設定よりも先に呼び出す
+//When using low jitter mode, call before uart, i2s, spi configuration
 void i2s_mclk_set_config(PIO pio, uint sm, int dma_ch, bool use_core1, CLOCK_MODE clock_mode, I2S_MODE mode){
     i2s_pio = pio;
     i2s_sm = sm;
@@ -300,7 +300,7 @@ void i2s_mclk_set_config(PIO pio, uint sm, int dma_ch, bool use_core1, CLOCK_MOD
     i2s_clock_mode = clock_mode;
     i2s_mode = mode;
 
-    //あらかじめclk_periをclk_sysから分離する
+    //Separate clk_peri from clk_sys in advance
     if (i2s_clock_mode == CLOCK_MODE_LOW_JITTER_OC){
         vreg_set_voltage(VREG_VOLTAGE_1_20);
     }
@@ -317,7 +317,7 @@ void i2s_mclk_init(uint32_t audio_clock){
     uint clock_pin_base = i2s_clk_pin_base;
     uint offset, offset_mclk;
 
-    //再生状態をGPIO25で通知
+    //Notify playback state via GPIO25
     if (playback_handler == default_playback_handler){
         gpio_init(PICO_DEFAULT_LED_PIN);
         gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
@@ -407,7 +407,7 @@ void i2s_mclk_init(uint32_t audio_clock){
         }
     }
     else{
-        //sys_clk変更
+        //Change sys_clk
         if (audio_clock % 48000 == 0){
             switch (i2s_clock_mode){
                 case CLOCK_MODE_LOW_JITTER:
@@ -437,7 +437,7 @@ void i2s_mclk_init(uint32_t audio_clock){
             clk_48khz = false;
         }
 
-        //mclk出力
+        //mclk output
         if (i2s_mode == MODE_I2S || i2s_mode == MODE_I2S_DUAL){
             switch (i2s_clock_mode){
                 case CLOCK_MODE_LOW_JITTER:
@@ -452,7 +452,7 @@ void i2s_mclk_init(uint32_t audio_clock){
             }
         }
 
-        //pio周波数変更
+        //Change pio frequency
         uint dev;
         if (clk_48khz == true){
             switch (i2s_clock_mode){
@@ -540,7 +540,7 @@ void i2s_mclk_init(uint32_t audio_clock){
 }
 
 void i2s_mclk_change_clock(uint32_t audio_clock){
-    //周波数変更
+    //Change frequency
     if (i2s_clock_mode == CLOCK_MODE_DEFAULT){
         float div;
         div = (float)clock_get_hz(clk_sys) / (float)(audio_clock * 128);
@@ -561,7 +561,7 @@ void i2s_mclk_change_clock(uint32_t audio_clock){
         }
     }
     else{
-        //sys_clk変更
+        //Change sys_clk
         if (audio_clock % 48000 == 0 && clk_48khz == false){
             switch (i2s_clock_mode){
                 case CLOCK_MODE_LOW_JITTER:
@@ -591,7 +591,7 @@ void i2s_mclk_change_clock(uint32_t audio_clock){
             clk_48khz = false;
         }
 
-        //pio周波数変更
+        //Change pio frequency
         uint dev;
         if (clk_48khz == true){
             switch (i2s_clock_mode){
@@ -623,7 +623,7 @@ void i2s_mclk_change_clock(uint32_t audio_clock){
     }
 }
 
-//i2sのバッファにusb受信データを積む
+//Stack USB received data in i2s buffer
 bool i2s_enqueue(uint8_t* in, int sample, uint8_t resolution){
     int i, j;
     static int32_t lch_buf[I2S_DATA_LEN / 2];
@@ -664,15 +664,15 @@ bool i2s_enqueue(uint8_t* in, int sample, uint8_t resolution){
             }
         }
 
-        //音量処理
+        //Volume processing
         for (i = 0; i < sample / 2; i++){
             lch_buf[i] = (int32_t)(((int64_t)lch_buf[i] * mul_l) >> 29u);
             rch_buf[i] = (int32_t)(((int64_t)rch_buf[i] * mul_r) >> 29u);
         }
 
-        //i2sバッファに格納
+        //Store in i2s buffer
         if (i2s_mode == MODE_EXDF && i2s_use_core1 == false){
-            //並び替え
+            //Rearrange
             for (int i = 0, j = 0; i < sample / 2; i++) {
                 uint64_t left  = part1by1_32(lch_buf[i]);
                 uint64_t right = part1by1_32(rch_buf[i]);
@@ -684,7 +684,7 @@ bool i2s_enqueue(uint8_t* in, int sample, uint8_t resolution){
             }
         }
         else if ((i2s_mode == MODE_PT8211_DUAL || i2s_mode == MODE_I2S_DUAL) && i2s_use_core1 == false){
-            //並び替え
+            //Rearrange
             for (int i = 0, j = 0; i < sample / 2; i++) {
                 //
                 uint64_t tmp1, tmp2, merged;
@@ -697,7 +697,7 @@ bool i2s_enqueue(uint8_t* in, int sample, uint8_t resolution){
                 i2s_buf[enqueue_pos][j++] = (uint32_t)(merged >> 32);     // 上位32bit
                 i2s_buf[enqueue_pos][j++] = (uint32_t)(merged & 0xFFFFFFFF); // 下位32bit
 
-                //反転
+                //Invert
                 if (lch_buf[i] == INT32_MIN){
                     d_l = INT32_MAX;
                 }

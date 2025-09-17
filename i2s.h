@@ -35,114 +35,114 @@ typedef enum {
 } CLOCK_MODE;
 
 /**
- * @brief 再生状態の切り替わりを通知する関数の型
- * 
- * @param state 再生状態 true:再生開始 false:再生停止
+ * @brief Function type for notifying playback state changes
+ *
+ * @param state Playback state true:playback started false:playback stopped
  */
 typedef void (*ExternalFunction)(bool state);
 
 /**
- * @brief core1のmain関数の型
- * 
+ * @brief Function type for core1 main function
+ *
  */
 typedef void (*Core1MainFunction)(void);
 
 /**
- * @brief i2sの出力ピンを設定する
- * 
- * @param data_pin data出力ピン
- * @param clock_pin_base LRCLK出力ピン
- * @param mclk_pin_pin LRCLK出力ピン
+ * @brief Set i2s output pins
+ *
+ * @param data_pin data output pin
+ * @param clock_pin_base LRCLK output pin
+ * @param mclk_pin_pin MCLK output pin
  * @note BCLK=clock_pin_base+1
- * @note MODE_EXDFの場合、DOUTL = data_pin, DOUTR = data_pin + 1, WCK=clock_pin_base, BCK=clock_pin_base+1 MCLK=clock_pin_base+2
+ * @note For MODE_EXDF, DOUTL = data_pin, DOUTR = data_pin + 1, WCK=clock_pin_base, BCK=clock_pin_base+1 MCLK=clock_pin_base+2
  */
 void i2s_mclk_set_pin(uint data_pin, uint clock_pin_base, uint mclk_pin);
 
 /**
- * @brief i2sの設定を行う
- * 
- * @param pio i2sに使用するpio pio0 or pio1
- * @param sm i2sに使用するsm0~2 (mclkはsm+1を使う)
- * @param dma_ch i2sに使用するdmaチャンネル
- * @param use_core1 pioのFIFOへデータを送る処理をcore1で行うかどうか
- * @param clock_mode クロックモードの選択 (CLOCK_MODE_DEFAULT, CLOCK_MODE_LOW_JITTER, CLOCK_MODE_LOW_JITTER_OC, CLOCK_MODE_EXTERNAL)
- * @param mode 出力するフォーマットを選択する (MODE_I2S, MODE_PT8211, MODE_EXDF, MODE_I2S_DUAL, MODE_PT8211_DUAL)
- * @note lowジッタモードを使用する場合はuart,i2s,spi設定よりも先に呼び出す
- * @note MODE_PT8211はBCLK32fsのlsbj16,MCLKなし
+ * @brief Configure i2s settings
+ *
+ * @param pio PIO to use for i2s: pio0 or pio1
+ * @param sm State machine to use for i2s: sm0~2 (mclk uses sm+1)
+ * @param dma_ch DMA channel to use for i2s
+ * @param use_core1 Whether to use core1 for sending data to PIO FIFO
+ * @param clock_mode Clock mode selection (CLOCK_MODE_DEFAULT, CLOCK_MODE_LOW_JITTER, CLOCK_MODE_LOW_JITTER_OC, CLOCK_MODE_EXTERNAL)
+ * @param mode Output format selection (MODE_I2S, MODE_PT8211, MODE_EXDF, MODE_I2S_DUAL, MODE_PT8211_DUAL)
+ * @note When using low jitter mode, call before uart, i2s, spi configuration
+ * @note MODE_PT8211 is BCLK32fs lsbj16, no MCLK
  */
 void i2s_mclk_set_config(PIO pio, uint sm, int dma_ch, bool use_core1, CLOCK_MODE clock_mode, I2S_MODE mode);
 
 /**
- * @brief i2sの初期化を行う
- * 
- * @param audio_clock サンプリング周波数
- * @note 呼び出してすぐにi2sの出力が開始される
+ * @brief Initialize i2s
+ *
+ * @param audio_clock Sampling frequency
+ * @note i2s output starts immediately after calling
  */
 void i2s_mclk_init(uint32_t audio_clock);
 
 /**
- * @brief i2sの周波数を変更する
- * 
- * @param audio_clock サンプリング周波数
- * @note ToDo 実行前後でミュート処理関数を呼び出される
+ * @brief Change i2s frequency
+ *
+ * @param audio_clock Sampling frequency
+ * @note ToDo Mute processing function is called before and after execution
  */
 void i2s_mclk_change_clock(uint32_t audio_clock);
 
 /**
- * @brief i2sのバッファにUSBから送られてきたuint8_tデータを格納する
- * 
- * @param in 格納するデータ
- * @param sample 格納するバイト数
- * @param resolution サンプルのビット深度 (16, 24, 32)
- * @return true 成功
- * @return false 失敗(バッファが一杯)
+ * @brief Store uint8_t data sent from USB into i2s buffer
+ *
+ * @param in Data to store
+ * @param sample Number of bytes to store
+ * @param resolution Sample bit depth (16, 24, 32)
+ * @return true Success
+ * @return false Failed (buffer full)
  */
 bool i2s_enqueue(uint8_t* in, int sample, uint8_t resolution);
 
 /**
- * @brief i2sのバッファからデータを取り出す
- * 
- * @param buff 取り出したデータ
- * @param sample 取り出したバイト数
- * @return true 成功
- * @return false 失敗(バッファが空)
- * @note use_core1がtrueのときに呼び出される
+ * @brief Retrieve data from i2s buffer
+ *
+ * @param buff Retrieved data
+ * @param sample Number of bytes retrieved
+ * @return true Success
+ * @return false Failed (buffer empty)
+ * @note Called when use_core1 is true
  */
 bool i2s_dequeue(int32_t** buff, int* sample);
 
 /**
- * @brief i2sのバッファの長さを取得する
- * 
- * @return int8_t バッファの長さ
+ * @brief Get i2s buffer length
+ *
+ * @return int8_t Buffer length
  */
 int8_t i2s_get_buf_length(void);
 
 /**
- * @brief i2sの音量を変更する
- * 
- * @param v 音量
- * @param ch チャンネル 0:L&R 1:L 2:R
+ * @brief Change i2s volume
+ *
+ * @param v Volume
+ * @param ch Channel 0:L&R 1:L 2:R
  */
 void i2s_volume_change(int16_t v, int8_t ch);
 
 /**
- * @brief i2s再生状態の切り替わりを通知するハンドラを設定する
- * 
- * @param func ExternalFunction形式の関数ポインタ
+ * @brief Set handler for notifying i2s playback state changes
+ *
+ * @param func Function pointer in ExternalFunction format
  */
 void set_playback_handler(ExternalFunction func);
 
 /**
- * @brief core1のmain関数を設定する
- * 
- * @param func Core1MainFunction形式の関数ポインタ
+ * @brief Set core1 main function
+ *
+ * @param func Function pointer in Core1MainFunction format
  */
 void set_core1_main_function(Core1MainFunction func);
 
 /**
- * @brief EXDFのLRのビットを交互に並び替える操作の高速化関数
- * 
- * @param x 入力
+ * @brief Fast function for alternately rearranging EXDF LR bits
+ *
+ * @param x Input
  */
 __force_inline uint64_t part1by1_32(uint32_t x){
     uint64_t res = x;
