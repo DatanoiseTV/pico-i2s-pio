@@ -23,6 +23,13 @@ getSampleRate	KEYWORD2
 getBitDepth	KEYWORD2
 isInitialized	KEYWORD2
 setPlaybackHandler	KEYWORD2
+setCallback	KEYWORD2
+setCallback32	KEYWORD2
+setCallbackFloat	KEYWORD2
+processCallback	KEYWORD2
+startCallback	KEYWORD2
+stopCallback	KEYWORD2
+isCallbackActive	KEYWORD2
 floatToInt16	KEYWORD2
 floatToInt32	KEYWORD2
 floatToInt24	KEYWORD2

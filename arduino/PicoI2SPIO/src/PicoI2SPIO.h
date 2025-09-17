@@ -74,10 +74,40 @@ public:
     // Static callback for playback state
     static void setPlaybackHandler(void (*handler)(bool));
 
+    // Audio generation callback support
+    typedef void (*AudioCallback)(int16_t* buffer, size_t frames);
+    typedef void (*AudioCallback32)(int32_t* buffer, size_t frames);
+    typedef void (*AudioCallbackFloat)(float* left, float* right, size_t frames);
+
+    // Set audio generation callback
+    void setCallback(AudioCallback callback);
+    void setCallback32(AudioCallback32 callback);
+    void setCallbackFloat(AudioCallbackFloat callback);
+
+    // Process callback and fill buffer
+    bool processCallback();
+
+    // Start/stop automatic callback processing
+    void startCallback();
+    void stopCallback();
+    bool isCallbackActive() const { return callback_active_; }
+
     // Utility functions
     static int16_t floatToInt16(float sample);
     static int32_t floatToInt32(float sample);
     static int16_t floatToInt24(float sample);
+
+private:
+    // Callback members
+    AudioCallback callback_16_;
+    AudioCallback32 callback_32_;
+    AudioCallbackFloat callback_float_;
+    bool callback_active_;
+    int16_t* callback_buffer_16_;
+    int32_t* callback_buffer_32_;
+    float* callback_float_left_;
+    float* callback_float_right_;
+    size_t callback_buffer_size_;
 };
 
 // Singleton instance for simple usage

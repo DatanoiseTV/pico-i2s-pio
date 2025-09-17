@@ -115,6 +115,63 @@ I2S.beginAdvanced(
 - `MODE_I2S_DUAL`: Dual mono I2S
 - `MODE_PT8211_DUAL`: Dual mono PT8211
 
+## Audio Callbacks
+
+The library supports audio generation callbacks for real-time audio synthesis:
+
+### Callback Types
+
+#### Integer Callback (16-bit)
+```cpp
+void audioCallback(int16_t* buffer, size_t frames) {
+  // Generate 'frames' stereo samples
+  // buffer layout: L,R,L,R...
+  for (size_t i = 0; i < frames; i++) {
+    buffer[i*2] = leftSample;
+    buffer[i*2+1] = rightSample;
+  }
+}
+
+I2S.setCallback(audioCallback);
+```
+
+#### Float Callback (Separate Channels)
+```cpp
+void audioCallbackFloat(float* left, float* right, size_t frames) {
+  // Generate 'frames' samples for each channel
+  for (size_t i = 0; i < frames; i++) {
+    left[i] = generateLeft();   // Range: -1.0 to 1.0
+    right[i] = generateRight();
+  }
+}
+
+I2S.setCallbackFloat(audioCallbackFloat);
+```
+
+#### 32-bit Integer Callback
+```cpp
+void audioCallback32(int32_t* buffer, size_t frames) {
+  // For 32-bit audio
+}
+
+I2S.setCallback32(audioCallback32);
+```
+
+### Using Callbacks
+
+```cpp
+void setup() {
+  I2S.begin();
+  I2S.setCallbackFloat(myAudioGenerator);
+  I2S.startCallback();  // Enable automatic processing
+}
+
+void loop() {
+  I2S.processCallback();  // Fill buffer when needed
+  // Do other tasks...
+}
+```
+
 ## Examples
 
 ### Simple Tone Generator
@@ -164,6 +221,33 @@ I2S.beginAdvanced(
   MODE_PT8211,                // PT8211 mode
   48000, 16
 );
+```
+
+### Synthesizer with Callbacks
+```cpp
+void synthCallback(float* left, float* right, size_t frames) {
+  static float phase = 0;
+
+  for (size_t i = 0; i < frames; i++) {
+    // Generate stereo sine wave
+    float sample = sin(phase) * 0.5;
+    left[i] = sample;
+    right[i] = sample;
+
+    phase += 2.0 * PI * 440.0 / 48000.0;
+    if (phase > 2.0 * PI) phase -= 2.0 * PI;
+  }
+}
+
+void setup() {
+  I2S.begin();
+  I2S.setCallbackFloat(synthCallback);
+  I2S.startCallback();
+}
+
+void loop() {
+  I2S.processCallback();
+}
 ```
 
 ## Supported DACs

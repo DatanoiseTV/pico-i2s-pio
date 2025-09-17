@@ -15,7 +15,11 @@ PicoI2SPIO I2S;
 // Constructor
 PicoI2SPIO::PicoI2SPIO()
     : pio_(pio0), sm_(0), dma_ch_(0), initialized_(false),
-      sample_rate_(48000), bit_depth_(16) {
+      sample_rate_(48000), bit_depth_(16),
+      callback_16_(nullptr), callback_32_(nullptr), callback_float_(nullptr),
+      callback_active_(false), callback_buffer_16_(nullptr),
+      callback_buffer_32_(nullptr), callback_float_left_(nullptr),
+      callback_float_right_(nullptr), callback_buffer_size_(0) {
 }
 
 // Initialize with default pins
@@ -76,7 +80,152 @@ void PicoI2SPIO::end() {
     pio_sm_set_enabled(pio_, sm_, false);
     pio_sm_set_enabled(pio_, sm_ + 1, false);  // MCLK state machine
 
+    // Clean up callback buffers
+    if (callback_buffer_16_) {
+        delete[] callback_buffer_16_;
+        callback_buffer_16_ = nullptr;
+    }
+    if (callback_buffer_32_) {
+        delete[] callback_buffer_32_;
+        callback_buffer_32_ = nullptr;
+    }
+    if (callback_float_left_) {
+        delete[] callback_float_left_;
+        callback_float_left_ = nullptr;
+    }
+    if (callback_float_right_) {
+        delete[] callback_float_right_;
+        callback_float_right_ = nullptr;
+    }
+
     initialized_ = false;
+    callback_active_ = false;
+}
+
+// Set audio generation callbacks
+void PicoI2SPIO::setCallback(AudioCallback callback) {
+    callback_16_ = callback;
+    callback_32_ = nullptr;
+    callback_float_ = nullptr;
+
+    // Allocate buffer if needed
+    if (!callback_buffer_16_ && callback) {
+        callback_buffer_size_ = 256;  // 128 stereo samples
+        callback_buffer_16_ = new int16_t[callback_buffer_size_];
+    }
+}
+
+void PicoI2SPIO::setCallback32(AudioCallback32 callback) {
+    callback_16_ = nullptr;
+    callback_32_ = callback;
+    callback_float_ = nullptr;
+
+    // Allocate buffer if needed
+    if (!callback_buffer_32_ && callback) {
+        callback_buffer_size_ = 256;  // 128 stereo samples
+        callback_buffer_32_ = new int32_t[callback_buffer_size_];
+    }
+}
+
+void PicoI2SPIO::setCallbackFloat(AudioCallbackFloat callback) {
+    callback_16_ = nullptr;
+    callback_32_ = nullptr;
+    callback_float_ = callback;
+
+    // Allocate buffers if needed
+    if (!callback_float_left_ && callback) {
+        callback_buffer_size_ = 128;  // 128 samples per channel
+        callback_float_left_ = new float[callback_buffer_size_];
+        callback_float_right_ = new float[callback_buffer_size_];
+    }
+}
+
+// Process callback and fill buffer
+bool PicoI2SPIO::processCallback() {
+    if (!initialized_ || (!callback_16_ && !callback_32_ && !callback_float_)) {
+        return false;
+    }
+
+    // Check if buffer has space
+    if (i2s_get_buf_length() >= I2S_TARGET_LEVEL) {
+        return false;
+    }
+
+    if (callback_16_ && bit_depth_ == 16) {
+        // Call the callback to generate samples
+        callback_16_(callback_buffer_16_, callback_buffer_size_ / 2);
+        // Write to I2S
+        return write(reinterpret_cast<uint8_t*>(callback_buffer_16_),
+                    callback_buffer_size_ * sizeof(int16_t));
+    }
+    else if (callback_32_ && bit_depth_ == 32) {
+        // Call the callback to generate samples
+        callback_32_(callback_buffer_32_, callback_buffer_size_ / 2);
+        // Write to I2S
+        return write(reinterpret_cast<uint8_t*>(callback_buffer_32_),
+                    callback_buffer_size_ * sizeof(int32_t));
+    }
+    else if (callback_float_) {
+        // Call the callback to generate samples
+        callback_float_(callback_float_left_, callback_float_right_, callback_buffer_size_);
+
+        // Convert float to appropriate bit depth
+        if (bit_depth_ == 16) {
+            if (!callback_buffer_16_) {
+                callback_buffer_16_ = new int16_t[callback_buffer_size_ * 2];
+            }
+            for (size_t i = 0; i < callback_buffer_size_; i++) {
+                callback_buffer_16_[i * 2] = floatToInt16(callback_float_left_[i]);
+                callback_buffer_16_[i * 2 + 1] = floatToInt16(callback_float_right_[i]);
+            }
+            return write(reinterpret_cast<uint8_t*>(callback_buffer_16_),
+                        callback_buffer_size_ * 2 * sizeof(int16_t));
+        }
+        else if (bit_depth_ == 32) {
+            if (!callback_buffer_32_) {
+                callback_buffer_32_ = new int32_t[callback_buffer_size_ * 2];
+            }
+            for (size_t i = 0; i < callback_buffer_size_; i++) {
+                callback_buffer_32_[i * 2] = floatToInt32(callback_float_left_[i]);
+                callback_buffer_32_[i * 2 + 1] = floatToInt32(callback_float_right_[i]);
+            }
+            return write(reinterpret_cast<uint8_t*>(callback_buffer_32_),
+                        callback_buffer_size_ * 2 * sizeof(int32_t));
+        }
+        else if (bit_depth_ == 24) {
+            // 24-bit requires special handling
+            uint8_t* buffer24 = new uint8_t[callback_buffer_size_ * 2 * 3];
+            for (size_t i = 0; i < callback_buffer_size_; i++) {
+                int32_t left24 = floatToInt24(callback_float_left_[i]);
+                int32_t right24 = floatToInt24(callback_float_right_[i]);
+
+                // Pack left channel
+                buffer24[i * 6] = (left24 >> 8) & 0xFF;
+                buffer24[i * 6 + 1] = (left24 >> 16) & 0xFF;
+                buffer24[i * 6 + 2] = (left24 >> 24) & 0xFF;
+
+                // Pack right channel
+                buffer24[i * 6 + 3] = (right24 >> 8) & 0xFF;
+                buffer24[i * 6 + 4] = (right24 >> 16) & 0xFF;
+                buffer24[i * 6 + 5] = (right24 >> 24) & 0xFF;
+            }
+            bool result = write(buffer24, callback_buffer_size_ * 2 * 3);
+            delete[] buffer24;
+            return result;
+        }
+    }
+
+    return false;
+}
+
+// Start automatic callback processing
+void PicoI2SPIO::startCallback() {
+    callback_active_ = true;
+}
+
+// Stop automatic callback processing
+void PicoI2SPIO::stopCallback() {
+    callback_active_ = false;
 }
 
 // Write audio samples
